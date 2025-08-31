@@ -3,21 +3,24 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]/route";
 import { db } from "@/lib/db";
 import bcrypt from "bcrypt";
+
+// This function gets a list of all employees for the dropdown menu
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
 
-  // Check if user is an ADMIN
-  if (!session || session.user.role !== 'ADMIN') {
+  if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN')) {
     return new NextResponse("Unauthorized", { status: 403 });
   }
 
   try {
     const employees = await db.employeeProfile.findMany({
+      orderBy: {
+        firstName: 'asc'
+      },
       include: {
         user: {
           select: {
             email: true,
-            role: true,
           }
         }
       }
@@ -28,11 +31,12 @@ export async function GET(req: Request) {
     return new NextResponse("Internal Server Error", { status: 500 });
   }
 }
+
+// This is your existing function to create a new employee
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
 
-  // 1. Check if user is an ADMIN
-  if (!session || session.user.role !== 'ADMIN') {
+  if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN')) {
     return new NextResponse("Unauthorized", { status: 403 });
   }
 
@@ -40,7 +44,6 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { email, password, firstName, lastName, position, startDate } = body;
 
-    // 2. Check if user with that email already exists
     const existingUser = await db.user.findUnique({
       where: { email: email },
     });
@@ -49,15 +52,13 @@ export async function POST(req: Request) {
       return new NextResponse("User with this email already exists", { status: 409 });
     }
 
-    // 3. Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 4. Create the User and their EmployeeProfile in one transaction
     const newUser = await db.user.create({
       data: {
         email,
         password: hashedPassword,
-        role: 'EMPLOYEE', // All users created here are employees
+        role: 'EMPLOYEE',
         profile: {
           create: {
             firstName,
@@ -68,7 +69,7 @@ export async function POST(req: Request) {
         },
       },
       include: {
-        profile: true, // Include the new profile in the response
+        profile: true,
       },
     });
     

@@ -1,6 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
+// This is your Prisma schema file
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,45 +8,90 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// --- USER AND PROFILE MODELS ---
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  password      String
-  role          Role      @default(EMPLOYEE)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  profile       EmployeeProfile?
+  id        String           @id @default(cuid())
+  email     String           @unique
+  password  String
+  role      Role             @default(EMPLOYEE)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  profile   EmployeeProfile?
 }
 
 model EmployeeProfile {
-  id        String    @id @default(cuid())
-  userId    String    @unique
-  user      User      @relation(fields: [userId], references: [id])
-  firstName String
-  lastName  String
-  position  String
-  startDate DateTime
+  id            String         @id @default(cuid())
+  userId        String         @unique
+  user          User           @relation(fields: [userId], references: [id])
+  firstName     String
+  lastName      String
+  position      String
+  startDate     DateTime
+  managerId     String?
+  manager       EmployeeProfile? @relation("DirectReports", fields: [managerId], references: [id])
+  directReports EmployeeProfile[]  @relation("DirectReports")
   leaveRequests LeaveRequest[]
+  leaveBalances LeaveBalance[]
+}
+
+// --- LEAVE MANAGEMENT MODELS (FINAL VERSION) ---
+model LeaveType {
+  id               String         @id @default(cuid())
+  name             String         @unique
+  defaultAllowance Float          @default(0) // The default amount
+  unit             LeaveUnit      @default(DAYS)  // Measured in DAYS or HOURS
+  cadence          LeaveCadence   @default(ANNUAL) // Is it ANNUAL or MONTHLY?
+  balances         LeaveBalance[]
+  requests         LeaveRequest[]
+}
+
+model LeaveBalance {
+  id            String          @id @default(cuid())
+  employeeId    String
+  employee      EmployeeProfile @relation(fields: [employeeId], references: [id])
+  leaveTypeId   String
+  leaveType     LeaveType       @relation(fields: [leaveTypeId], references: [id])
+  total         Float           // The total allowance for this period (can be the default or a manual override)
+  remaining     Float           // The remaining balance
+  year          Int
+  month         Int?            // The month (1-12) for monthly allowances, null for annual
+
+  @@unique([employeeId, leaveTypeId, year, month])
 }
 
 model LeaveRequest {
-  id        String    @id @default(cuid())
-  startDate DateTime
-  endDate   DateTime
-  type      String // e.g., "Vacation", "Sick Leave"
-  status    LeaveStatus @default(PENDING)
-  employeeId String
-  employee  EmployeeProfile @relation(fields: [employeeId], references: [id])
-  createdAt DateTime @default(now())
+  id          String          @id @default(cuid())
+  employeeId  String
+  employee    EmployeeProfile @relation(fields: [employeeId], references: [id])
+  leaveTypeId String
+  leaveType   LeaveType       @relation(fields: [leaveTypeId], references: [id])
+  startDate   DateTime
+  endDate     DateTime
+  status      LeaveStatus     @default(PENDING)
+  createdAt   DateTime        @default(now())
 }
 
+// --- ENUMS (pre-defined choices) ---
 enum Role {
   EMPLOYEE
   ADMIN
+  SUPER_ADMIN
 }
 
 enum LeaveStatus {
   PENDING
-  APPROVED
+  APPROVED_BY_MANAGER
+  APPROVED_BY_ADMIN
   DENIED
+}
+
+enum LeaveUnit {
+  DAYS
+  HOURS
+}
+
+// New Enum for Annual vs. Monthly
+enum LeaveCadence {
+  ANNUAL
+  MONTHLY
 }
