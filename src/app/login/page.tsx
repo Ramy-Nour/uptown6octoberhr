@@ -1,7 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -25,15 +27,21 @@ export default function LoginPage() {
     e.preventDefault()
     setIsLoading(true)
     setError('')
-    // Here you would add your actual login logic,
-    // for now, we'll just simulate a successful login
-    console.log('Logging in with:', email, password)
-    setTimeout(() => {
-      setIsLoading(false)
-      // On success, you would redirect the user
-      // router.push('/dashboard')
-    }, 1000)
-  }
+
+    const result = await signIn('credentials', {
+      redirect: false, // We will handle the redirect manually
+      email: email,
+      password: password,
+    });
+
+    if (result?.error) {
+      setError("Invalid email or password");
+      setIsLoading(false);
+    } else {
+      // On successful login, redirect to the dashboard
+      router.push('/dashboard');
+    }
+  };
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-secondary">
@@ -69,10 +77,16 @@ export default function LoginPage() {
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
           </CardContent>
-          <CardFooter>
+          <CardFooter className="flex flex-col">
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? 'Signing In...' : 'Sign In'}
             </Button>
+            <div className="mt-4 text-center text-sm">
+              Don't have an account?{" "}
+              <Link href="/register" className="underline">
+                Sign up
+              </Link>
+            </div>
           </CardFooter>
         </form>
       </Card>
