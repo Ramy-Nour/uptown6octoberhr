@@ -23,9 +23,9 @@ export default function RegisterPage() {
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError('')
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
 
     try {
       const response = await fetch('/api/auth/register', {
@@ -37,7 +37,6 @@ export default function RegisterPage() {
       });
 
       if (!response.ok) {
-        // If the server responds with an error (like "User already exists")
         const data = await response.text();
         throw new Error(data || 'Failed to create account');
       }
@@ -45,10 +44,12 @@ export default function RegisterPage() {
       // On success, redirect to the login page
       router.push('/login');
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-} catch (err: any) {
-  setError(err.message);
-}
+    } catch (err) {
+        if (err instanceof Error) {
+            setError(err.message);
+        } else {
+            setError('An unexpected error occurred');
+        }
     } finally {
       setIsLoading(false);
     }
