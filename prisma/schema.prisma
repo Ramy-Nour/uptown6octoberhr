@@ -1,50 +1,54 @@
-generator client { 
-  provider = "prisma-client-js" 
-} 
- 
-datasource db { 
-  provider = "sqlite" 
-  url      = env("DATABASE_URL") 
-} 
- 
-// User Roles 
-enum UserRole { 
-  EMPLOYEE 
-  MANAGER 
-  HR_ADMIN 
-  SYSTEM_ADMIN 
-} 
- 
-// Leave Request Status 
-enum LeaveStatus { 
-  PENDING 
-  APPROVED 
-  REJECTED 
-  CANCELLED 
-} 
- 
-model User { 
-  id            String   @id @default(cuid()) 
-  email         String   @unique 
-  passwordHash  String 
-  name          String 
-  role          UserRole @default(EMPLOYEE) 
-  employeeId    String?  @unique 
-  isActive      Boolean  @default(true) 
-  createdAt     DateTime @default(now()) 
-  updatedAt     DateTime @updatedAt 
-  @@map("users") 
-} 
- 
-model LeaveRequest { 
-  id        String      @id @default(cuid()) 
-  userId    String 
-  startDate DateTime 
-  endDate   DateTime 
-  totalDays Float 
-  reason    String? 
-  status    LeaveStatus @default(PENDING) 
-  createdAt DateTime    @default(now()) 
-  updatedAt DateTime    @updatedAt 
-  @@map("leave_requests") 
-} 
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String
+  role          Role      @default(EMPLOYEE)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  profile       EmployeeProfile?
+}
+
+model EmployeeProfile {
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id])
+  firstName String
+  lastName  String
+  position  String
+  startDate DateTime
+  leaveRequests LeaveRequest[]
+}
+
+model LeaveRequest {
+  id        String    @id @default(cuid())
+  startDate DateTime
+  endDate   DateTime
+  type      String // e.g., "Vacation", "Sick Leave"
+  status    LeaveStatus @default(PENDING)
+  employeeId String
+  employee  EmployeeProfile @relation(fields: [employeeId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+enum Role {
+  EMPLOYEE
+  ADMIN
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  DENIED
+}
