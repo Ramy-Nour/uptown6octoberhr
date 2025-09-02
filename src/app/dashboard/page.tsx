@@ -155,12 +155,55 @@ export default function DashboardPage() {
 
   // --- FINAL FIX: PRE-BUILD ALL TABLE CONTENT ---
 
-  const balancesTableContent = balances.length > 0 ? ( balances.map(b => ( <TableRow key={b.id}> <TableCell>{b.leaveType.name}</TableCell> <TableCell>{b.leaveType.cadence === 'ANNUAL' ? b.year : `${getMonthName(b.month)} ${b.year}`}</TableCell> <TableCell className="text-right font-medium">{b.remaining} {b.leaveType.unit.toLowerCase()}</TableCell> <TableCell className="text-right">{b.total} {b.leaveType.unit.toLowerCase()}</TableCell> </TableRow> )) ) : ( <TableRow><TableCell colSpan={4} className="text-center">No balances to display.</TableCell></TableRow> );
-  const historyTableContent = requestHistory.length > 0 ? ( requestHistory.map(req => ( <TableRow key={req.id}> <TableCell>{req.leaveType.name}</TableCell> <TableCell>{format(new Date(req.startDate), 'PPP')} - {format(new Date(req.endDate), 'PPP')}</TableCell> <TableCell><Badge variant={req.status === 'DENIED' ? 'destructive' : 'default'}>{req.status.replace(/_/g, ' ')}</Badge></TableCell> <TableCell>{req.denialReason}</TableCell> </TableRow> )) ) : ( <TableRow><TableCell colSpan={4} className="text-center">No requests found in this period.</TableCell></TableRow> );
+  const balancesTableContent = balances.length > 0 ? (
+    balances.map(b => (
+      <TableRow key={b.id}>
+        <TableCell>{b.leaveType.name}</TableCell>
+        <TableCell>{b.leaveType.cadence === 'ANNUAL' ? b.year : `${getMonthName(b.month)} ${b.year}`}</TableCell>
+        <TableCell className="text-right font-medium">{b.remaining} {b.leaveType.unit.toLowerCase()}</TableCell>
+        <TableCell className="text-right">{b.total} {b.leaveType.unit.toLowerCase()}</TableCell>
+      </TableRow>
+    ))
+  ) : (
+    <TableRow><TableCell colSpan={4} className="text-center">No balances to display.</TableCell></TableRow>
+  );
   
-  const managerPendingContent = pendingManagerRequests.map(req => ( <TableRow key={req.id}> <TableCell>{req.employee.firstName} {req.employee.lastName}</TableCell> <TableCell>{req.leaveType.name}</TableCell> <TableCell>{format(new Date(req.startDate), 'PPP')} - {format(new Date(req.endDate), 'PPP')}</TableCell> <TableCell className="text-right space-x-2"> <Button size="sm" variant="outline" onClick={() => { setCurrentRequestToAction(req); setIsDenyDialogOpen(true); }}>Deny</Button> <Button size="sm" onClick={() => handleRequestAction(req.id, 'APPROVED_BY_MANAGER')}>Approve</Button> </TableCell> </TableRow> ));
-  const hrPendingContent = pendingHrRequests.map(req => ( <TableRow key={req.id}> <TableCell>{req.employee.firstName} {req.employee.lastName}</TableCell> <TableCell>{req.leaveType.name}</TableCell> <TableCell>{format(new Date(req.startDate), 'PPP')} - {format(new Date(req.endDate), 'PPP')}</TableCell> <TableCell className="text-right space-x-2"> <Button size="sm" variant="outline" onClick={() => { setCurrentRequestToAction(req); setIsDenyDialogOpen(true); }}>Deny</Button> <Button size="sm" onClick={() => handleRequestAction(req.id, 'APPROVED_BY_ADMIN')}>Final Approve</Button> </TableCell> </TableRow> ));
+  const historyTableContent = requestHistory.length > 0 ? (
+    requestHistory.map(req => (
+      <TableRow key={req.id}>
+        <TableCell>{req.leaveType.name}</TableCell>
+        <TableCell>{format(new Date(req.startDate), 'PPP')} - {format(new Date(req.endDate), 'PPP')}</TableCell>
+        <TableCell><Badge variant={req.status === 'DENIED' ? 'destructive' : 'default'}>{req.status.replace(/_/g, ' ')}</Badge></TableCell>
+        <TableCell>{req.denialReason}</TableCell>
+      </TableRow>
+    ))
+  ) : (
+    <TableRow><TableCell colSpan={4} className="text-center">No requests found in this period.</TableCell></TableRow>
+  );
+  
+  const managerPendingContent = pendingManagerRequests.map(req => (
+      <TableRow key={req.id}>
+          <TableCell>{req.employee.firstName} {req.employee.lastName}</TableCell>
+          <TableCell>{req.leaveType.name}</TableCell>
+          <TableCell>{format(new Date(req.startDate), 'PPP')} - {format(new Date(req.endDate), 'PPP')}</TableCell>
+          <TableCell className="text-right space-x-2">
+              <Button size="sm" variant="outline" onClick={() => { setCurrentRequestToAction(req); setIsDenyDialogOpen(true); }}>Deny</Button>
+              <Button size="sm" onClick={() => handleRequestAction(req.id, 'APPROVED_BY_MANAGER')}>Approve</Button>
+          </TableCell>
+      </TableRow>
+  ));
 
+  const hrPendingContent = pendingHrRequests.map(req => (
+      <TableRow key={req.id}>
+          <TableCell>{req.employee.firstName} {req.employee.lastName}</TableCell>
+          <TableCell>{req.leaveType.name}</TableCell>
+          <TableCell>{format(new Date(req.startDate), 'PPP')} - {format(new Date(req.endDate), 'PPP')}</TableCell>
+          <TableCell className="text-right space-x-2">
+              <Button size="sm" variant="outline" onClick={() => { setCurrentRequestToAction(req); setIsDenyDialogOpen(true); }}>Deny</Button>
+              <Button size="sm" onClick={() => handleRequestAction(req.id, 'APPROVED_BY_ADMIN')}>Final Approve</Button>
+          </TableCell>
+      </TableRow>
+  ));
 
   return (
     <>
@@ -172,15 +215,15 @@ export default function DashboardPage() {
 
         {isHr && pendingHrRequests.length > 0 && (
           <Card className="border-red-500 bg-red-500/5">
-              <CardHeader><CardTitle>Final HR Approvals</CardTitle><CardDescription>Manager-approved requests waiting for final sign-off.</CardDescription></CardHeader>
-              <CardContent><Table><TableHeader><TableRow><TableHead>Employee</TableHead><TableHead>Type</TableHead><TableHead>Dates</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{hrPendingContent}</TableBody></Table></CardContent>
+            <CardHeader><CardTitle>Final HR Approvals</CardTitle><CardDescription>Manager-approved requests waiting for final sign-off.</CardDescription></CardHeader>
+            <CardContent><Table><TableHeader><TableRow><TableHead>Employee</TableHead><TableHead>Type</TableHead><TableHead>Dates</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{hrPendingContent}</TableBody></Table></CardContent>
           </Card>
         )}
 
         {isHr && pendingManagerRequests.length > 0 && (
           <Card className="border-primary bg-primary/5">
-              <CardHeader><CardTitle>Manager Approvals</CardTitle><CardDescription>Requests waiting for your approval.</CardDescription></CardHeader>
-              <CardContent><Table><TableHeader><TableRow><TableHead>Employee</TableHead><TableHead>Type</TableHead><TableHead>Dates</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{managerPendingContent}</TableBody></Table></CardContent>
+            <CardHeader><CardTitle>Manager Approvals</CardTitle><CardDescription>Requests waiting for your approval.</CardDescription></CardHeader>
+            <CardContent><Table><TableHeader><TableRow><TableHead>Employee</TableHead><TableHead>Type</TableHead><TableHead>Dates</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{managerPendingContent}</TableBody></Table></CardContent>
           </Card>
         )}
 
