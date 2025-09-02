@@ -210,7 +210,10 @@ export default function DashboardPage() {
       <main className="p-4 sm:p-8 max-w-7xl mx-auto space-y-8">
         <div className="flex justify-between items-center">
           <div><h1 className="text-3xl font-bold">Dashboard</h1><p className="text-muted-foreground">Welcome back, {session?.user?.email}</p></div>
-          <Button onClick={() => signOut({ callbackUrl: '/login' })}>Log Out</Button>
+          <div className="flex items-center space-x-4">
+            {isHr && (<Button asChild variant="outline"><Link href="/dashboard/reports">Go to Reports</Link></Button>)}
+            <Button onClick={() => signOut({ callbackUrl: '/login' })}>Log Out</Button>
+          </div>
         </div>
 
         {isHr && pendingHrRequests.length > 0 && (
