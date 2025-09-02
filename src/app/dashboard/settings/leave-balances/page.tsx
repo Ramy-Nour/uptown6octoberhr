@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+// Define types for our data
 type Employee = { id: string; firstName: string; lastName: string; };
 type LeaveType = { id: string; name: string; cadence: 'ANNUAL' | 'MONTHLY'; };
 type LeaveBalance = {
@@ -34,7 +35,7 @@ const months = [
 export default function AssignBalancePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-
+  
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [balances, setBalances] = useState<LeaveBalance[]>([]);
@@ -59,7 +60,7 @@ export default function AssignBalancePage() {
         fetch('/api/leave-balances'),
       ]);
       if (!empRes.ok || !ltRes.ok || !balRes.ok) throw new Error('Failed to fetch initial data');
-
+      
       const empData = await empRes.json();
       const ltData = await ltRes.json();
       const balData = await balRes.json();
@@ -81,7 +82,7 @@ export default function AssignBalancePage() {
       router.push('/login');
     }
   }, [session, status, router]);
-
+  
   const selectedLeaveType = leaveTypes.find(lt => lt.id === selectedLeaveTypeId);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -116,7 +117,7 @@ export default function AssignBalancePage() {
       setIsLoading(false);
     }
   };
-
+  
   if (status === 'loading') {
     return <div className="flex items-center justify-center min-h-screen"><p>Loading...</p></div>;
   }
@@ -165,7 +166,7 @@ export default function AssignBalancePage() {
                 <Select onValueChange={setSelectedEmployeeId} value={selectedEmployeeId}>
                   <SelectTrigger><SelectValue placeholder="Select an employee" /></SelectTrigger>
                   <SelectContent>
-                    {employees.map(emp => <SelectItem key={emp.id} value={emp.id}>{emp.firstName} {emp.lastName}</SelectItem>)}
+                    {employees.filter(emp => emp && emp.id).map(emp => <SelectItem key={emp.id} value={emp.id}>{emp.firstName} {emp.lastName}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -174,11 +175,11 @@ export default function AssignBalancePage() {
                 <Select onValueChange={setSelectedLeaveTypeId} value={selectedLeaveTypeId}>
                   <SelectTrigger><SelectValue placeholder="Select a leave type" /></SelectTrigger>
                   <SelectContent>
-                    {leaveTypes.map(lt => <SelectItem key={lt.id} value={lt.id}>{lt.name}</SelectItem>)}
+                    {leaveTypes.filter(lt => lt && lt.id).map(lt => <SelectItem key={lt.id} value={lt.id}>{lt.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-
+              
               {selectedLeaveType?.cadence === 'MONTHLY' && (
                 <div className="grid gap-2">
                     <Label>Month</Label>

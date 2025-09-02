@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]/route";
 import { db } from "@/lib/db";
 
-// This function gets a list of all assigned balances
+// This function gets a list of all assigned balances for the admin page
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
 
@@ -38,7 +38,7 @@ export async function GET(req: Request) {
   }
 }
 
-// This function creates or updates a balance
+// This function MANUALLY creates or updates a balance and marks it as an override
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
 
@@ -48,49 +48,50 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { employeeId, leaveTypeId, total, year } = body;
+    const { employeeId, leaveTypeId, total, year, month } = body;
 
-    if (!employeeId || !leaveTypeId || !total || !year) {
+    if (!employeeId || !leaveTypeId || total === undefined || !year) {
       return new NextResponse("Missing required fields", { status: 400 });
     }
     
     const leaveType = await db.leaveType.findUnique({ where: { id: leaveTypeId } });
     const isMonthly = leaveType?.cadence === 'MONTHLY';
-    const currentMonth = new Date().getMonth() + 1;
     const yearInt = parseInt(year, 10);
+    const monthInt = isMonthly ? parseInt(month, 10) : null;
     const totalFloat = parseFloat(total);
 
-    // Use a flexible 'findFirst' which correctly handles the null month for annual leave
     const existingBalance = await db.leaveBalance.findFirst({
       where: {
         employeeId: employeeId,
         leaveTypeId: leaveTypeId,
         year: yearInt,
-        month: isMonthly ? currentMonth : null,
+        month: monthInt,
       }
     });
 
     let newBalance;
 
     if (existingBalance) {
-      // If it exists, update it
+      // If it exists, update it and mark as a manual override
       newBalance = await db.leaveBalance.update({
         where: { id: existingBalance.id },
         data: {
           total: totalFloat,
-          remaining: totalFloat,
+          remaining: totalFloat, // Reset remaining when total is manually updated
+          isManualOverride: true,
         }
       });
     } else {
-      // If it does not exist, create it
+      // If it does not exist, create it and mark as a manual override
       newBalance = await db.leaveBalance.create({
         data: {
           employeeId: employeeId,
           leaveTypeId: leaveTypeId,
           year: yearInt,
-          month: isMonthly ? currentMonth : null,
+          month: monthInt,
           total: totalFloat,
           remaining: totalFloat,
+          isManualOverride: true,
         }
       });
     }

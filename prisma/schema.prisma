@@ -38,23 +38,24 @@ model EmployeeProfile {
 model LeaveType {
   id               String         @id @default(cuid())
   name             String         @unique
-  defaultAllowance Float          @default(0) // The default amount
-  unit             LeaveUnit      @default(DAYS)  // Measured in DAYS or HOURS
-  cadence          LeaveCadence   @default(ANNUAL) // Is it ANNUAL or MONTHLY?
+  defaultAllowance Float          @default(0)
+  unit             LeaveUnit      @default(DAYS)
+  cadence          LeaveCadence   @default(ANNUAL)
   balances         LeaveBalance[]
   requests         LeaveRequest[]
 }
 
 model LeaveBalance {
-  id            String          @id @default(cuid())
-  employeeId    String
-  employee      EmployeeProfile @relation(fields: [employeeId], references: [id])
-  leaveTypeId   String
-  leaveType     LeaveType       @relation(fields: [leaveTypeId], references: [id])
-  total         Float           // The total allowance for this period (can be the default or a manual override)
-  remaining     Float           // The remaining balance
-  year          Int
-  month         Int?            // The month (1-12) for monthly allowances, null for annual
+  id               String          @id @default(cuid())
+  employeeId       String
+  employee         EmployeeProfile @relation(fields: [employeeId], references: [id])
+  leaveTypeId      String
+  leaveType        LeaveType       @relation(fields: [leaveTypeId], references: [id])
+  total            Float
+  remaining        Float
+  year             Int
+  month            Int?
+  isManualOverride Boolean         @default(false) // New flag to track manual changes
 
   @@unique([employeeId, leaveTypeId, year, month])
 }
@@ -68,6 +69,7 @@ model LeaveRequest {
   startDate   DateTime
   endDate     DateTime
   status      LeaveStatus     @default(PENDING)
+  denialReason String?        // New field for denial reasons
   createdAt   DateTime        @default(now())
 }
 
@@ -90,7 +92,6 @@ enum LeaveUnit {
   HOURS
 }
 
-// New Enum for Annual vs. Monthly
 enum LeaveCadence {
   ANNUAL
   MONTHLY
