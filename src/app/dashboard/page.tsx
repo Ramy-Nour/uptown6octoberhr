@@ -34,69 +34,103 @@ type Request = {
 }
 
 const getMonthName = (monthNumber: number | null) => {
-    if (!monthNumber) return '';
-    const date = new Date();
-    date.setMonth(monthNumber - 1);
-    return date.toLocaleString('en-US', { month: 'long' });
-}
+  if (!monthNumber) return '';
+  const date = new Date();
+  date.setMonth(monthNumber - 1);
+  return date.toLocaleString('en-US', { month: 'long' });
+};
 
 const denialReasons = ["High Work Capacity", "Request Overlaps", "Insufficient Notice", "Other"];
 
 export default function DashboardPage() {
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
-  
+
+  // State for data
+  const [isManager, setIsManager] = useState(false);
   const [balances, setBalances] = useState<Balance[]>([]);
   const [pendingManagerRequests, setPendingManagerRequests] = useState<Request[]>([]);
   const [pendingHrRequests, setPendingHrRequests] = useState<Request[]>([]);
   const [requestHistory, setRequestHistory] = useState<Request[]>([]);
-  
+
+  // Date filter state
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [endDate, setEndDate] = useState<Date | undefined>();
 
+  // Loading and error
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  
+
+  // Denial dialog
   const [isDenyDialogOpen, setIsDenyDialogOpen] = useState(false);
   const [currentRequestToAction, setCurrentRequestToAction] = useState<Request | null>(null);
   const [denialReason, setDenialReason] = useState('');
   const [otherReason, setOtherReason] = useState('');
 
+  // Check if user is HR (Admin or Super Admin)
+  const isHr = session?.user.role === 'ADMIN' || session?.user.role === 'SUPER_ADMIN';
+
+  // Fetch all data
   const fetchData = async () => {
     if (!session) return;
     try {
+      setError('');
+      setIsLoading(true);
+
+      // Check if user is manager
+      const isManagerCheck = await fetch('/api/me/is-manager');
+      if (!isManagerCheck.ok) throw new Error('Failed to check manager status');
+      const { isManager: userIsManager } = await isManagerCheck.json();
+      setIsManager(userIsManager);
+
+      // Build history URL with optional date filter
       let historyUrl = '/api/leave-requests';
       if (startDate && endDate) {
-          const formattedStartDate = startDate.toISOString().split('T')[0];
-          const formattedEndDate = endDate.toISOString().split('T')[0];
-          historyUrl += `?startDate=${formattedStartDate}&endDate=${formattedEndDate}`;
+        const formattedStartDate = startDate.toISOString().split('T')[0];
+        const formattedEndDate = endDate.toISOString().split('T')[0];
+        historyUrl += `?startDate=${formattedStartDate}&endDate=${formattedEndDate}`;
       }
 
-      const promisesToFetch = [ fetch('/api/my-balances'), fetch(historyUrl) ];
-      
-      const isManagerOrAdmin = session.user.role === 'ADMIN' || session.user.role === 'SUPER_ADMIN';
-      if (isManagerOrAdmin) {
-        promisesToFetch.push(fetch('/api/manager/requests'));
-        promisesToFetch.push(fetch('/api/admin/requests'));
+      // Prepare fetch promises
+      const promises: Promise<Response>[] = [
+        fetch('/api/my-balances'),
+        fetch(historyUrl)
+      ];
+
+      if (userIsManager) {
+        promises.push(fetch('/api/manager/requests'));
+      }
+      if (isHr) {
+        promises.push(fetch('/api/admin/requests'));
       }
 
-      const responses = await Promise.all(promisesToFetch);
+      const responses = await Promise.all(promises);
 
+      // Check for errors
       for (const res of responses) {
         if (!res.ok) {
           const errorText = await res.text();
-          throw new Error(`Failed to fetch from ${res.url}: ${res.status} ${errorText}`);
+          throw new Error(`Failed to fetch data: ${res.status} ${errorText}`);
         }
       }
-      
-      const [balancesData, historyData] = await Promise.all([responses[0].json(), responses[1].json()]);
+
+      // Parse responses
+      const [balancesRes, historyRes] = responses;
+      const balancesData = await balancesRes.json();
+      const historyData = await historyRes.json();
+
       setBalances(balancesData);
       setRequestHistory(historyData);
 
-      if (isManagerOrAdmin) {
-        const [managerData, adminData] = await Promise.all([responses[2].json(), responses[3].json()]);
+      let index = 2;
+      if (userIsManager) {
+        const managerData = await responses[index].json();
         setPendingManagerRequests(managerData);
-        setPendingHrRequests(adminData);
+        index++;
+      }
+      if (isHr) {
+        const hrData = await responses[index].json();
+        setPendingHrRequests(hrData);
       }
     } catch (err: any) {
       setError(err.message);
@@ -105,41 +139,46 @@ export default function DashboardPage() {
     }
   };
 
+  // Load data on session change
   useEffect(() => {
     if (sessionStatus === 'authenticated') {
-      setIsLoading(true);
       fetchData();
     } else if (sessionStatus === 'unauthenticated') {
       router.push('/login');
     }
   }, [sessionStatus, router]);
 
-  const handleFilter = () => { fetchData(); };
+  // Handle filter button
+  const handleFilter = () => {
+    fetchData();
+  };
 
+  // Handle approve/deny actions
   const handleRequestAction = async (requestId: string, newStatus: string, reason?: string) => {
     try {
-        setError('');
-        const response = await fetch(`/api/leave-requests/${requestId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: newStatus, denialReason: reason }),
-        });
-        if (!response.ok) {
-            const data = await response.text();
-            throw new Error(data || 'Action failed');
-        }
-        fetchData();
+      setError('');
+      const response = await fetch(`/api/leave-requests/${requestId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus, denialReason: reason }),
+      });
+      if (!response.ok) {
+        const data = await response.text();
+        throw new Error(data || 'Action failed');
+      }
+      fetchData(); // Refresh data
     } catch (err: any) {
-        setError(err.message);
+      setError(err.message);
     }
   };
 
+  // Handle denial dialog submit
   const handleDenialSubmit = async () => {
     if (!currentRequestToAction) return;
     const finalReason = denialReason === 'Other' ? otherReason : denialReason;
     if (!finalReason) {
-        setError("A reason for denial is required.");
-        return;
+      setError("A reason for denial is required.");
+      return;
     }
     await handleRequestAction(currentRequestToAction.id, 'DENIED', finalReason);
     setIsDenyDialogOpen(false);
@@ -147,14 +186,12 @@ export default function DashboardPage() {
     setOtherReason('');
   };
 
+  // Show loading
   if (sessionStatus === 'loading' || isLoading) {
     return <div className="flex items-center justify-center min-h-screen"><p>Loading...</p></div>;
   }
-  
-  const isHr = session?.user.role === 'ADMIN' || session?.user.role === 'SUPER_ADMIN';
 
-  // --- FINAL FIX: PRE-BUILD ALL TABLE CONTENT ---
-
+  // Build table content to avoid whitespace issues
   const balancesTableContent = balances.length > 0 ? (
     balances.map(b => (
       <TableRow key={b.id}>
@@ -167,98 +204,257 @@ export default function DashboardPage() {
   ) : (
     <TableRow><TableCell colSpan={4} className="text-center">No balances to display.</TableCell></TableRow>
   );
-  
+
   const historyTableContent = requestHistory.length > 0 ? (
     requestHistory.map(req => (
       <TableRow key={req.id}>
         <TableCell>{req.leaveType.name}</TableCell>
         <TableCell>{format(new Date(req.startDate), 'PPP')} - {format(new Date(req.endDate), 'PPP')}</TableCell>
-        <TableCell><Badge variant={req.status === 'DENIED' ? 'destructive' : 'default'}>{req.status.replace(/_/g, ' ')}</Badge></TableCell>
+        <TableCell><Badge variant={req.status === 'DENIED' ? 'destructive' : 'default'}>
+          {req.status.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}
+        </Badge></TableCell>
         <TableCell>{req.denialReason}</TableCell>
       </TableRow>
     ))
   ) : (
     <TableRow><TableCell colSpan={4} className="text-center">No requests found in this period.</TableCell></TableRow>
   );
-  
-  const managerPendingContent = pendingManagerRequests.map(req => (
-      <TableRow key={req.id}>
-          <TableCell>{req.employee.firstName} {req.employee.lastName}</TableCell>
-          <TableCell>{req.leaveType.name}</TableCell>
-          <TableCell>{format(new Date(req.startDate), 'PPP')} - {format(new Date(req.endDate), 'PPP')}</TableCell>
-          <TableCell className="text-right space-x-2">
-              <Button size="sm" variant="outline" onClick={() => { setCurrentRequestToAction(req); setIsDenyDialogOpen(true); }}>Deny</Button>
-              <Button size="sm" onClick={() => handleRequestAction(req.id, 'APPROVED_BY_MANAGER')}>Approve</Button>
-          </TableCell>
-      </TableRow>
-  ));
 
-  const hrPendingContent = pendingHrRequests.map(req => (
+  const managerPendingContent = pendingManagerRequests.length > 0 ? (
+    pendingManagerRequests.map(req => (
       <TableRow key={req.id}>
-          <TableCell>{req.employee.firstName} {req.employee.lastName}</TableCell>
-          <TableCell>{req.leaveType.name}</TableCell>
-          <TableCell>{format(new Date(req.startDate), 'PPP')} - {format(new Date(req.endDate), 'PPP')}</TableCell>
-          <TableCell className="text-right space-x-2">
-              <Button size="sm" variant="outline" onClick={() => { setCurrentRequestToAction(req); setIsDenyDialogOpen(true); }}>Deny</Button>
-              <Button size="sm" onClick={() => handleRequestAction(req.id, 'APPROVED_BY_ADMIN')}>Final Approve</Button>
-          </TableCell>
+        <TableCell>{req.employee.firstName} {req.employee.lastName}</TableCell>
+        <TableCell>{req.leaveType.name}</TableCell>
+        <TableCell>{format(new Date(req.startDate), 'PPP')} - {format(new Date(req.endDate), 'PPP')}</TableCell>
+        <TableCell className="text-right space-x-2">
+          <Button size="sm" variant="outline" onClick={() => { setCurrentRequestToAction(req); setIsDenyDialogOpen(true); }}>Deny</Button>
+          <Button size="sm" onClick={() => handleRequestAction(req.id, 'APPROVED_BY_MANAGER')}>
+            Approve
+          </Button>
+        </TableCell>
       </TableRow>
-  ));
+    ))
+  ) : (
+    <TableRow><TableCell colSpan={4} className="text-center">No requests waiting for your approval.</TableCell></TableRow>
+  );
+
+  const hrPendingContent = pendingHrRequests.length > 0 ? (
+    pendingHrRequests.map(req => (
+      <TableRow key={req.id}>
+        <TableCell>{req.employee.firstName} {req.employee.lastName}</TableCell>
+        <TableCell>{req.leaveType.name}</TableCell>
+        <TableCell>{format(new Date(req.startDate), 'PPP')} - {format(new Date(req.endDate), 'PPP')}</TableCell>
+        <TableCell className="text-right space-x-2">
+          <Button size="sm" variant="outline" onClick={() => { setCurrentRequestToAction(req); setIsDenyDialogOpen(true); }}>Deny</Button>
+          <Button size="sm" onClick={() => handleRequestAction(req.id, 'APPROVED_BY_ADMIN')}>
+            Final Approve
+          </Button>
+        </TableCell>
+      </TableRow>
+    ))
+  ) : (
+    <TableRow><TableCell colSpan={4} className="text-center">No requests waiting for final HR approval.</TableCell></TableRow>
+  );
 
   return (
     <>
       <main className="p-4 sm:p-8 max-w-7xl mx-auto space-y-8">
+        {/* Header */}
         <div className="flex justify-between items-center">
-          <div><h1 className="text-3xl font-bold">Dashboard</h1><p className="text-muted-foreground">Welcome back, {session?.user?.email}</p></div>
+          <div>
+            <h1 className="text-3xl font-bold">Dashboard</h1>
+            <p className="text-muted-foreground">Welcome back, {session?.user?.email}</p>
+          </div>
           <div className="flex items-center space-x-4">
-            {isHr && (<Button asChild variant="outline"><Link href="/dashboard/reports">Go to Reports</Link></Button>)}
+            {isHr && (
+              <Button asChild variant="outline">
+                <Link href="/dashboard/reports">Go to Reports</Link>
+              </Button>
+            )}
             <Button onClick={() => signOut({ callbackUrl: '/login' })}>Log Out</Button>
           </div>
         </div>
 
+        {/* HR Final Approval Section */}
         {isHr && pendingHrRequests.length > 0 && (
           <Card className="border-red-500 bg-red-500/5">
-            <CardHeader><CardTitle>Final HR Approvals</CardTitle><CardDescription>Manager-approved requests waiting for final sign-off.</CardDescription></CardHeader>
-            <CardContent><Table><TableHeader><TableRow><TableHead>Employee</TableHead><TableHead>Type</TableHead><TableHead>Dates</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{hrPendingContent}</TableBody></Table></CardContent>
+            <CardHeader>
+              <CardTitle>Final HR Approvals</CardTitle>
+              <CardDescription>Manager-approved requests waiting for final sign-off.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Employee</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Dates</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {hrPendingContent}
+                </TableBody>
+              </Table>
+            </CardContent>
           </Card>
         )}
 
-        {isHr && pendingManagerRequests.length > 0 && (
+        {/* Manager Approval Section */}
+        {isManager && pendingManagerRequests.length > 0 && (
           <Card className="border-primary bg-primary/5">
-            <CardHeader><CardTitle>Manager Approvals</CardTitle><CardDescription>Requests waiting for your approval.</CardDescription></CardHeader>
-            <CardContent><Table><TableHeader><TableRow><TableHead>Employee</TableHead><TableHead>Type</TableHead><TableHead>Dates</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{managerPendingContent}</TableBody></Table></CardContent>
+            <CardHeader>
+              <CardTitle>Manager Approvals</CardTitle>
+              <CardDescription>Requests waiting for your approval.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Employee</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Dates</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {managerPendingContent}
+                </TableBody>
+              </Table>
+            </CardContent>
           </Card>
         )}
 
+        {/* My Leave Balances */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <div><CardTitle>My Leave Balances</CardTitle><CardDescription>Your available leave for the current period.</CardDescription></div>
-            <Link href="/dashboard/leave/request"><Button>Request Time Off</Button></Link>
+            <div>
+              <CardTitle>My Leave Balances</CardTitle>
+              <CardDescription>Your available leave for the current period.</CardDescription>
+            </div>
+            <Link href="/dashboard/leave/request">
+              <Button>Request Time Off</Button>
+            </Link>
           </CardHeader>
-          <CardContent><Table><TableHeader><TableRow><TableHead>Leave Type</TableHead><TableHead>Period</TableHead><TableHead className="text-right">Remaining</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader><TableBody>{balancesTableContent}</TableBody></Table></CardContent>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Leave Type</TableHead>
+                  <TableHead>Period</TableHead>
+                  <TableHead className="text-right">Remaining</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {balancesTableContent}
+              </TableBody>
+            </Table>
+          </CardContent>
         </Card>
-        
+
+        {/* Request History */}
         <Card>
-          <CardHeader><CardTitle>My Request History</CardTitle><CardDescription>A history of all your submitted leave requests.</CardDescription></CardHeader>
+          <CardHeader>
+            <CardTitle>My Request History</CardTitle>
+            <CardDescription>A history of all your submitted leave requests.</CardDescription>
+          </CardHeader>
           <CardContent>
             <div className="flex items-center space-x-4 mb-4">
-              <Popover><PopoverTrigger asChild><Button variant={"outline"} className={cn("w-[240px] justify-start text-left font-normal", !startDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{startDate ? format(startDate, "PPP") : <span>Pick a start date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={startDate} onSelect={setStartDate} /></PopoverContent></Popover>
-              <Popover><PopoverTrigger asChild><Button variant={"outline"} className={cn("w-[240px] justify-start text-left font-normal", !endDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{endDate ? format(endDate, "PPP") : <span>Pick an end date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={endDate} onSelect={setEndDate} /></PopoverContent></Popover>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-[240px] justify-start text-left font-normal",
+                      !startDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {startDate ? format(startDate, "PPP") : <span>Pick start date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar mode="single" selected={startDate} onSelect={setStartDate} />
+                </PopoverContent>
+              </Popover>
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-[240px] justify-start text-left font-normal",
+                      !endDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {endDate ? format(endDate, "PPP") : <span>Pick end date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar mode="single" selected={endDate} onSelect={setEndDate} />
+                </PopoverContent>
+              </Popover>
+
               <Button onClick={handleFilter}>Filter</Button>
             </div>
-            <Table><TableHeader><TableRow><TableHead>Type</TableHead><TableHead>Dates</TableHead><TableHead>Status</TableHead><TableHead>Denial Reason</TableHead></TableRow></TableHeader><TableBody>{historyTableContent}</TableBody></Table>
+
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Dates</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Denial Reason</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {historyTableContent}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       </main>
 
+      {/* Denial Dialog */}
       <Dialog open={isDenyDialogOpen} onOpenChange={setIsDenyDialogOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Reason for Denial</DialogTitle><DialogDescription>Please provide a reason for denying this request.</DialogDescription></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Reason for Denial</DialogTitle>
+            <DialogDescription>Please provide a reason for denying this request.</DialogDescription>
+          </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid gap-2"><Label htmlFor="denialReason">Reason</Label><Select onValueChange={setDenialReason} value={denialReason}><SelectTrigger><SelectValue placeholder="Select a reason..." /></SelectTrigger><SelectContent>{denialReasons.map(reason => <SelectItem key={reason} value={reason}>{reason}</SelectItem>)}</SelectContent></Select></div>
-            {denialReason === 'Other' && ( <div className="grid gap-2"><Label htmlFor="otherReason">Please specify</Label><Textarea id="otherReason" value={otherReason} onChange={(e) => setOtherReason(e.target.value)} /></div> )}
+            <div className="grid gap-2">
+              <Label htmlFor="denialReason">Reason</Label>
+              <Select onValueChange={setDenialReason} value={denialReason}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a reason..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {denialReasons.map((reason) => (
+                    <SelectItem key={reason} value={reason}>
+                      {reason}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {denialReason === 'Other' && (
+              <div className="grid gap-2">
+                <Label htmlFor="otherReason">Please specify</Label>
+                <Textarea
+                  id="otherReason"
+                  value={otherReason}
+                  onChange={(e) => setOtherReason(e.target.value)}
+                />
+              </div>
+            )}
           </div>
-          <DialogFooter><Button variant="outline" onClick={() => setIsDenyDialogOpen(false)}>Cancel</Button><Button onClick={handleDenialSubmit}>Confirm Denial</Button></DialogFooter>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDenyDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleDenialSubmit}>Confirm Denial</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

@@ -32,7 +32,7 @@ export async function GET(req: Request) {
   }
 }
 
-// This is your existing function to create a new employee
+// This is your existing function to create a new employee - MODIFIED VERSION
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
 
@@ -42,7 +42,12 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { email, password, firstName, lastName, position, startDate } = body;
+    const { email, password, firstName, lastName, position, startDate, managerId, role } = body;
+
+    // Validate role if provided
+    if (role && !['EMPLOYEE', 'ADMIN', 'SUPER_ADMIN'].includes(role)) {
+      return new NextResponse("Invalid role", { status: 400 });
+    }
 
     const existingUser = await db.user.findUnique({
       where: { email: email },
@@ -54,22 +59,44 @@ export async function POST(req: Request) {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Prepare employee profile data
+    const profileData: any = {
+      firstName,
+      lastName,
+      position,
+      startDate: new Date(startDate),
+    };
+
+    // Add manager relationship if provided
+    if (managerId) {
+      profileData.manager = {
+        connect: { id: managerId }
+      };
+    }
+
     const newUser = await db.user.create({
       data: {
         email,
         password: hashedPassword,
-        role: 'EMPLOYEE',
+        role: role || 'EMPLOYEE', // Use provided role or default to EMPLOYEE
         profile: {
-          create: {
-            firstName,
-            lastName,
-            position,
-            startDate: new Date(startDate),
-          },
+          create: profileData,
         },
       },
       include: {
-        profile: true,
+        profile: {
+          include: {
+            manager: {
+              include: {
+                user: {
+                  select: {
+                    email: true,
+                  }
+                }
+              }
+            }
+          }
+        },
       },
     });
     

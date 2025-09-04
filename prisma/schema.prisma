@@ -10,13 +10,19 @@ datasource db {
 
 // --- USER AND PROFILE MODELS ---
 model User {
-  id        String           @id @default(cuid())
-  email     String           @unique
-  password  String
-  role      Role             @default(EMPLOYEE)
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-  profile   EmployeeProfile?
+  id                   String           @id @default(cuid())
+  email                String           @unique
+  password             String
+  role                 Role             @default(EMPLOYEE)
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  profile              EmployeeProfile?
+
+  // Inverse relations for approvals/denials
+  approvedRequests     LeaveRequest[]   @relation("ApprovedByUser")
+  deniedRequests       LeaveRequest[]   @relation("DeniedByUser")
+  cancelledRequests    LeaveRequest[]   @relation("CancelledByUser")
+  createdHolidays      Holiday[]        @relation("CreatedByUser")
 }
 
 model EmployeeProfile {
@@ -32,9 +38,10 @@ model EmployeeProfile {
   directReports EmployeeProfile[]  @relation("DirectReports")
   leaveRequests LeaveRequest[]
   leaveBalances LeaveBalance[]
+  holidays      Holiday[]
 }
 
-// --- LEAVE MANAGEMENT MODELS (FINAL VERSION) ---
+// --- LEAVE MANAGEMENT MODELS ---
 model LeaveType {
   id               String         @id @default(cuid())
   name             String         @unique
@@ -55,22 +62,54 @@ model LeaveBalance {
   remaining        Float
   year             Int
   month            Int?
-  isManualOverride Boolean         @default(false) // New flag to track manual changes
+  isManualOverride Boolean         @default(false)
+  isLocked         Boolean         @default(false)
 
   @@unique([employeeId, leaveTypeId, year, month])
 }
 
 model LeaveRequest {
-  id          String          @id @default(cuid())
-  employeeId  String
-  employee    EmployeeProfile @relation(fields: [employeeId], references: [id])
-  leaveTypeId String
-  leaveType   LeaveType       @relation(fields: [leaveTypeId], references: [id])
-  startDate   DateTime
-  endDate     DateTime
-  status      LeaveStatus     @default(PENDING)
-  denialReason String?        // New field for denial reasons
-  createdAt   DateTime        @default(now())
+  id                   String          @id @default(cuid())
+  employeeId           String
+  employee             EmployeeProfile @relation(fields: [employeeId], references: [id])
+  leaveTypeId          String
+  leaveType            LeaveType       @relation(fields: [leaveTypeId], references: [id])
+  startDate            DateTime
+  endDate              DateTime
+  status               LeaveStatus     @default(PENDING_MANAGER)
+  denialReason         String?
+  cancellationReason   String?
+  skipReason           String?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  // Approvers
+  approvedById         String?
+  deniedById           String?
+  cancelledById        String?
+  approvedBy           User?           @relation("ApprovedByUser", fields: [approvedById], references: [id])
+  deniedBy             User?           @relation("DeniedByUser", fields: [deniedById], references: [id])
+  cancelledBy          User?           @relation("CancelledByUser", fields: [cancelledById], references: [id])
+
+  // Timestamps for audit trail
+  approvedAt           DateTime?
+  deniedAt             DateTime?
+  cancelledAt          DateTime?
+}
+
+// --- HOLIDAY MODEL ---
+model Holiday {
+  id            String           @id @default(cuid())
+  name          String
+  date          DateTime
+  type          HolidayType      @default(COMPANY)
+  teamId        String?
+  employeeId    String?
+  employee      EmployeeProfile? @relation(fields: [employeeId], references: [id])
+  createdBy     String
+  createdByUser User             @relation("CreatedByUser", fields: [createdBy], references: [id])
+  isLocked      Boolean          @default(false)
+  createdAt     DateTime         @default(now())
 }
 
 // --- ENUMS (pre-defined choices) ---
@@ -81,10 +120,11 @@ enum Role {
 }
 
 enum LeaveStatus {
-  PENDING
+  PENDING_MANAGER
   APPROVED_BY_MANAGER
   APPROVED_BY_ADMIN
   DENIED
+  CANCELLED
 }
 
 enum LeaveUnit {
@@ -95,4 +135,11 @@ enum LeaveUnit {
 enum LeaveCadence {
   ANNUAL
   MONTHLY
+}
+
+enum HolidayType {
+  NATIONAL
+  COMPANY
+  TEAM
+  EMPLOYEE
 }
