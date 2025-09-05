@@ -1,0 +1,244 @@
+// File: src/app/admin/holidays/page.tsx
+
+"use client";
+
+import { useState, useEffect, FormEvent } from 'react';
+import { useSession } from 'next-auth/react';
+
+// Define types for our data objects
+interface Holiday {
+  id: string;
+  name: string;
+  date: string;
+  type: string;
+  employeeId?: string | null;
+}
+
+interface Employee {
+  id: string;
+  profile: {
+    id: string;
+    firstName: string;
+    lastName: string;
+  };
+}
+
+export default function HolidayManagementPage() {
+  const { data: session } = useSession();
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // State for the form
+  const [editingHolidayId, setEditingHolidayId] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [date, setDate] = useState('');
+  const [type, setType] = useState('COMPANY');
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+
+  const resetForm = () => {
+    setEditingHolidayId(null);
+    setName('');
+    setDate('');
+    setType('COMPANY');
+    setSelectedEmployeeId('');
+    setError(null);
+  };
+
+  const fetchData = async () => {
+    try {
+      const [holidaysRes, employeesRes] = await Promise.all([
+        fetch('/api/holidays'),
+        fetch('/api/users?role=EMPLOYEE')
+      ]);
+
+      if (!holidaysRes.ok) throw new Error('Failed to fetch holidays');
+      if (!employeesRes.ok) throw new Error('Failed to fetch employees');
+
+      const holidaysData = await holidaysRes.json();
+      const employeesData = await employeesRes.json();
+      
+      setHolidays(holidaysData);
+      setEmployees(employeesData);
+
+    } catch (error: any) {
+      console.error(error);
+      setError('Failed to load page data. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleFormSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    const createdBy = session?.user?.id;
+    if (!createdBy) {
+      setError("You must be logged in.");
+      return;
+    }
+
+    if (type === 'EMPLOYEE' && !selectedEmployeeId) {
+        setError('Please select an employee for this holiday type.');
+        return;
+    }
+
+    const body = {
+        name,
+        date,
+        type,
+        createdBy, // For POST requests
+        employeeId: type === 'EMPLOYEE' ? selectedEmployeeId : null,
+    };
+
+    try {
+        let response;
+        if (editingHolidayId) {
+            // UPDATE logic
+            response = await fetch(`/api/holidays/${editingHolidayId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+        } else {
+            // CREATE logic
+            response = await fetch('/api/holidays', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+        }
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || 'Failed to save holiday');
+        }
+
+        resetForm();
+        await fetchData();
+        
+    } catch (error: any) {
+        console.error(error);
+        setError(error.message);
+    }
+  };
+
+  const handleDeleteHoliday = async (holidayId: string) => {
+    if (!window.confirm("Are you sure you want to delete this holiday?")) return;
+    setError(null);
+    try {
+      const response = await fetch(`/api/holidays/${holidayId}`, { method: 'DELETE' });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to delete holiday');
+      }
+      await fetchData();
+    } catch (error: any) {
+      console.error(error);
+      setError(error.message);
+    }
+  };
+
+  const handleEditClick = (holiday: Holiday) => {
+    setEditingHolidayId(holiday.id);
+    setName(holiday.name);
+    setDate(new Date(holiday.date).toISOString().split('T')[0]);
+    setType(holiday.type);
+    setSelectedEmployeeId(holiday.employeeId || '');
+  };
+
+  if (isLoading) { return <div className="p-8">Loading...</div>; }
+
+  return (
+    <div className="p-8">
+      <h1 className="text-2xl font-bold mb-6">Holiday Management</h1>
+      
+      <div className="mb-8 p-6 bg-white rounded-lg shadow-md">
+        <h2 className="text-xl font-semibold mb-4">
+          {editingHolidayId ? 'Edit Holiday' : 'Add New Holiday'}
+        </h2>
+        <form onSubmit={handleFormSubmit}>
+            {error && <p className="text-red-500 mb-4">{error}</p>}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <label htmlFor="name" className="block text-sm font-medium text-gray-700">Holiday Name</label>
+                    <input type="text" id="name" value={name} onChange={(e) => setName(e.target.value)} required className="mt-1 w-full border border-gray-300 rounded-md p-2"/>
+                </div>
+                <div>
+                    <label htmlFor="date" className="block text-sm font-medium text-gray-700">Date</label>
+                    <input type="date" id="date" value={date} onChange={(e) => setDate(e.target.value)} required className="mt-1 w-full border border-gray-300 rounded-md p-2"/>
+                </div>
+                <div>
+                    <label htmlFor="type" className="block text-sm font-medium text-gray-700">Type</label>
+                    <select id="type" value={type} onChange={(e) => setType(e.target.value)} className="mt-1 w-full border border-gray-300 rounded-md p-2">
+                        <option value="COMPANY">Company-Wide</option>
+                        <option value="NATIONAL">National</option>
+                        <option value="EMPLOYEE">Employee-Specific</option>
+                    </select>
+                </div>
+            </div>
+            {type === 'EMPLOYEE' && (
+                <div className="mt-6">
+                    <label htmlFor="employee" className="block text-sm font-medium text-gray-700">Select Employee</label>
+                    <select id="employee" value={selectedEmployeeId} onChange={(e) => setSelectedEmployeeId(e.target.value)} required className="mt-1 w-full border border-gray-300 rounded-md p-2">
+                        <option value="">-- Please select an employee --</option>
+                        {employees.map(emp => (
+                            <option key={emp.id} value={emp.profile.id}>
+                                {emp.profile.firstName} {emp.profile.lastName}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            )}
+             <div className="flex justify-end mt-6">
+                {editingHolidayId && (
+                  <button type="button" onClick={resetForm} className="px-4 py-2 bg-gray-300 text-black rounded-md hover:bg-gray-400 mr-2">
+                    Cancel
+                  </button>
+                )}
+                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                  {editingHolidayId ? 'Update Holiday' : 'Add Holiday'}
+                </button>
+            </div>
+        </form>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-md overflow-x-auto">
+        <table className="min-w-full">
+            <thead className="bg-gray-50">
+                <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+                {holidays.map((holiday) => (
+                <tr key={holiday.id}>
+                    <td className="px-6 py-4 whitespace-nowrap">{holiday.name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">{new Date(holiday.date).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 whitespace-now-rap">{holiday.type}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button onClick={() => handleEditClick(holiday)} className="text-indigo-600 hover:text-indigo-900">Edit</button>
+                        <button 
+                          onClick={() => handleDeleteHoliday(holiday.id)} 
+                          className="text-red-600 hover:text-red-900 ml-4"
+                        >
+                          Delete
+                        </button>
+                    </td>
+                </tr>
+                ))}
+            </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

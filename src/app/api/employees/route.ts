@@ -1,3 +1,5 @@
+// File: src/app/api/employees/route.ts
+
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]/route";
@@ -32,7 +34,7 @@ export async function GET(req: Request) {
   }
 }
 
-// This is your existing function to create a new employee - MODIFIED VERSION
+// This function creates a new employee
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
 
@@ -42,24 +44,19 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { email, password, firstName, lastName, position, startDate, managerId, role } = body;
-
-    // Validate role if provided
-    if (role && !['EMPLOYEE', 'ADMIN', 'SUPER_ADMIN'].includes(role)) {
-      return new NextResponse("Invalid role", { status: 400 });
-    }
+    const { email, password, firstName, lastName, position, startDate, managerId } = body;
 
     const existingUser = await db.user.findUnique({
       where: { email: email },
     });
 
     if (existingUser) {
-      return new NextResponse("User with this email already exists", { status: 409 });
+      // Corrected to send a JSON response
+      return NextResponse.json({ message: "User with this email already exists" }, { status: 409 });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Prepare employee profile data
     const profileData: any = {
       firstName,
       lastName,
@@ -67,7 +64,6 @@ export async function POST(req: Request) {
       startDate: new Date(startDate),
     };
 
-    // Add manager relationship if provided
     if (managerId) {
       profileData.manager = {
         connect: { id: managerId }
@@ -78,25 +74,13 @@ export async function POST(req: Request) {
       data: {
         email,
         password: hashedPassword,
-        role: role || 'EMPLOYEE', // Use provided role or default to EMPLOYEE
+        role: 'EMPLOYEE',
         profile: {
           create: profileData,
         },
       },
       include: {
-        profile: {
-          include: {
-            manager: {
-              include: {
-                user: {
-                  select: {
-                    email: true,
-                  }
-                }
-              }
-            }
-          }
-        },
+        profile: true,
       },
     });
     
@@ -104,6 +88,7 @@ export async function POST(req: Request) {
 
   } catch (error) {
     console.error("[EMPLOYEE_CREATION_ERROR]", error);
-    return new NextResponse("Internal Server Error", { status: 500 });
+    // Corrected to send a JSON response
+    return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
   }
 }

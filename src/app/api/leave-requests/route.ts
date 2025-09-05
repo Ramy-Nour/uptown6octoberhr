@@ -1,9 +1,11 @@
+// File: src/app/api/leave-requests/route.ts
+
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]/route";
 import { db } from "@/lib/db";
 
-// This new function fetches the leave request history for the logged-in user
+// Fetches the leave request history for the logged-in user
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
 
@@ -11,7 +13,6 @@ export async function GET(req: Request) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
-  // This part reads the date filters from the URL
   const { searchParams } = new URL(req.url);
   const startDate = searchParams.get('startDate');
   const endDate = searchParams.get('endDate');
@@ -29,15 +30,13 @@ export async function GET(req: Request) {
         employeeId: employeeProfile.id
     };
 
-    // If dates are provided, add them to the database query
     if (startDate && endDate) {
-        // Add 1 day to the end date to include the whole day
         const endOfDay = new Date(endDate);
         endOfDay.setDate(endOfDay.getDate() + 1);
 
         whereClause.createdAt = {
             gte: new Date(startDate),
-            lt: endOfDay, // Use 'less than' the start of the next day
+            lt: endOfDay,
         }
     }
 
@@ -59,7 +58,7 @@ export async function GET(req: Request) {
   }
 }
 
-// This function creates a new leave request
+// Creates a new leave request
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
 
@@ -75,57 +74,89 @@ export async function POST(req: Request) {
       return new NextResponse("Missing required fields", { status: 400 });
     }
 
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    if (start > end) {
+      return new NextResponse("End date must be on or after start date", { status: 400 });
+    }
+
     const employeeProfile = await db.employeeProfile.findUnique({
       where: { userId: session.user.id },
+      include: { workSchedule: true },
     });
 
     if (!employeeProfile) {
-      return new NextResponse("Employee profile not found for this user", { status: 404 });
+      return new NextResponse("Employee profile not found", { status: 404 });
     }
     
-    const leaveType = await db.leaveType.findUnique({ where: { id: leaveTypeId } });
-    if (!leaveType) {
-        return new NextResponse("Invalid Leave Type", { status: 400 });
+    let workSchedule = employeeProfile.workSchedule;
+    if (!workSchedule) {
+      workSchedule = await db.workSchedule.findFirst({ where: { isDefault: true } });
     }
-    
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const timeDifference = end.getTime() - start.getTime();
-    const requestedDays = Math.ceil(timeDifference / (1000 * 3600 * 24)) + 1;
+    if (!workSchedule) {
+      return new NextResponse("No default work schedule found. Please configure one.", { status: 500 });
+    }
 
-    if (requestedDays <= 0) {
-        return new NextResponse("End date must be on or after start date", { status: 400 });
+    const holidays = await db.holiday.findMany({
+      where: { date: { gte: start, lte: end } },
+    });
+    const holidayDates = new Set(holidays.map(h => h.date.toISOString().split('T')[0]));
+    
+    let workingDaysRequested = 0;
+    let currentDate = new Date(start);
+
+    const weekendMap = [
+      !workSchedule.isSunday, !workSchedule.isMonday, !workSchedule.isTuesday,
+      !workSchedule.isWednesday, !workSchedule.isThursday, !workSchedule.isFriday,
+      !workSchedule.isSaturday
+    ];
+
+    while (currentDate <= end) {
+      const dayOfWeek = currentDate.getDay();
+      const dateString = currentDate.toISOString().split('T')[0];
+
+      if (!weekendMap[dayOfWeek] && !holidayDates.has(dateString)) {
+        workingDaysRequested++;
+      }
+      currentDate.setDate(currentDate.getDate() + 1);
     }
     
-    const currentYear = start.getFullYear();
-    const currentMonth = start.getMonth() + 1;
-    const periodMonth = leaveType.cadence === 'MONTHLY' ? currentMonth : null;
+    if (workingDaysRequested <= 0) {
+        return new NextResponse("Your request does not contain any working days.", { status: 400 });
+    }
 
-    let balance = await db.leaveBalance.findFirst({
-        where: {
-            employeeId: employeeProfile.id,
-            leaveTypeId: leaveTypeId,
-            year: currentYear,
-            month: periodMonth
-        }
+    const balance = await db.leaveBalance.findFirst({
+      where: {
+        employeeId: employeeProfile.id,
+        leaveTypeId: leaveTypeId,
+        year: start.getFullYear(),
+      },
     });
 
-    if (!balance) {
-        balance = await db.leaveBalance.create({
-            data: {
-                employeeId: employeeProfile.id,
-                leaveTypeId: leaveTypeId,
-                year: currentYear,
-                month: periodMonth,
-                total: leaveType.defaultAllowance,
-                remaining: leaveType.defaultAllowance,
-                isManualOverride: false,
-            }
-        });
+    if (!balance || balance.remaining < workingDaysRequested) {
+      return new NextResponse(`Insufficient leave balance. Remaining: ${balance?.remaining || 0}, Requested Working Days: ${workingDaysRequested}`, { status: 400 });
     }
 
-    if (balance.remaining < requestedDays) {
-        return new NextResponse(`Insufficient leave balance. Remaining: ${balance.remaining}, Requested: ${requestedDays}`, { status: 400 });
+    let status: 'PENDING_MANAGER' | 'PENDING_ADMIN' = 'PENDING_MANAGER';
+    let skipReason: string | null = null;
+
+    if (!employeeProfile.managerId) {
+      status = 'PENDING_ADMIN';
+      skipReason = 'No manager assigned.';
+    } else {
+      const managerOnLeave = await db.leaveRequest.findFirst({
+        where: {
+          employeeId: employeeProfile.managerId,
+          status: { in: ['APPROVED_BY_MANAGER', 'APPROVED_BY_ADMIN'] },
+          startDate: { lte: end },
+          endDate: { gte: start },
+        },
+      });
+      if (managerOnLeave) {
+        status = 'PENDING_ADMIN';
+        skipReason = 'Manager is on leave during the requested period.';
+      }
     }
 
     const leaveRequest = await db.leaveRequest.create({
@@ -134,7 +165,8 @@ export async function POST(req: Request) {
         leaveTypeId: leaveTypeId,
         startDate: start,
         endDate: end,
-        status: 'PENDING',
+        status: status,
+        skipReason: skipReason,
       },
     });
 

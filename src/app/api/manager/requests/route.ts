@@ -1,3 +1,5 @@
+// File: src/app/api/manager/requests/route.ts
+
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]/route";
@@ -25,7 +27,8 @@ export async function GET(req: Request) {
             employee: {
                 managerId: userProfile.id
             },
-            status: 'PENDING'
+            // FIXED: Look for the correct status
+            status: 'PENDING_MANAGER'
         },
         include: {
             employee: {

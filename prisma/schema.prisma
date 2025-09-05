@@ -10,35 +10,38 @@ datasource db {
 
 // --- USER AND PROFILE MODELS ---
 model User {
-  id                   String           @id @default(cuid())
-  email                String           @unique
-  password             String
-  role                 Role             @default(EMPLOYEE)
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
-  profile              EmployeeProfile?
-
-  // Inverse relations for approvals/denials
-  approvedRequests     LeaveRequest[]   @relation("ApprovedByUser")
-  deniedRequests       LeaveRequest[]   @relation("DeniedByUser")
-  cancelledRequests    LeaveRequest[]   @relation("CancelledByUser")
-  createdHolidays      Holiday[]        @relation("CreatedByUser")
+  id                String              @id @default(cuid())
+  email             String              @unique
+  password          String
+  role              Role                @default(EMPLOYEE)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  profile           EmployeeProfile?
+  approvedRequests  LeaveRequest[]      @relation("ApprovedByUser")
+  deniedRequests    LeaveRequest[]      @relation("DeniedByUser")
+  cancelledRequests LeaveRequest[]      @relation("CancelledByUser")
+  createdHolidays   Holiday[]           @relation("CreatedByUser")
+  auditActions      LeaveRequestAudit[] @relation("ChangedByUser")
 }
 
 model EmployeeProfile {
-  id            String         @id @default(cuid())
-  userId        String         @unique
-  user          User           @relation(fields: [userId], references: [id])
-  firstName     String
-  lastName      String
-  position      String
-  startDate     DateTime
-  managerId     String?
-  manager       EmployeeProfile? @relation("DirectReports", fields: [managerId], references: [id])
-  directReports EmployeeProfile[]  @relation("DirectReports")
-  leaveRequests LeaveRequest[]
-  leaveBalances LeaveBalance[]
-  holidays      Holiday[]
+  id             String         @id @default(cuid())
+  userId         String         @unique
+  user           User           @relation(fields: [userId], references: [id])
+  firstName      String
+  lastName       String
+  position       String
+  startDate      DateTime
+  managerId      String?
+  manager        EmployeeProfile? @relation("DirectReports", fields: [managerId], references: [id])
+  directReports  EmployeeProfile[]  @relation("DirectReports")
+  leaveRequests  LeaveRequest[]
+  leaveBalances  LeaveBalance[]
+  holidays       Holiday[]
+  
+  // Link to the employee's specific work schedule
+  workScheduleId String?
+  workSchedule   WorkSchedule?  @relation(fields: [workScheduleId], references: [id])
 }
 
 // --- LEAVE MANAGEMENT MODELS ---
@@ -69,32 +72,41 @@ model LeaveBalance {
 }
 
 model LeaveRequest {
-  id                   String          @id @default(cuid())
-  employeeId           String
-  employee             EmployeeProfile @relation(fields: [employeeId], references: [id])
-  leaveTypeId          String
-  leaveType            LeaveType       @relation(fields: [leaveTypeId], references: [id])
-  startDate            DateTime
-  endDate              DateTime
-  status               LeaveStatus     @default(PENDING_MANAGER)
-  denialReason         String?
-  cancellationReason   String?
-  skipReason           String?
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
+  id                 String              @id @default(cuid())
+  employeeId         String
+  employee           EmployeeProfile     @relation(fields: [employeeId], references: [id])
+  leaveTypeId        String
+  leaveType          LeaveType           @relation(fields: [leaveTypeId], references: [id])
+  startDate          DateTime
+  endDate            DateTime
+  status             LeaveStatus         @default(PENDING_MANAGER)
+  denialReason       String?
+  cancellationReason String?
+  skipReason         String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  approvedById       String?
+  deniedById         String?
+  cancelledById      String?
+  approvedBy         User?               @relation("ApprovedByUser", fields: [approvedById], references: [id])
+  deniedBy           User?               @relation("DeniedByUser", fields: [deniedById], references: [id])
+  cancelledBy        User?               @relation("CancelledByUser", fields: [cancelledById], references: [id])
+  approvedAt         DateTime?
+  deniedAt           DateTime?
+  cancelledAt        DateTime?
+  auditTrail         LeaveRequestAudit[]
+}
 
-  // Approvers
-  approvedById         String?
-  deniedById           String?
-  cancelledById        String?
-  approvedBy           User?           @relation("ApprovedByUser", fields: [approvedById], references: [id])
-  deniedBy             User?           @relation("DeniedByUser", fields: [deniedById], references: [id])
-  cancelledBy          User?           @relation("CancelledByUser", fields: [cancelledById], references: [id])
-
-  // Timestamps for audit trail
-  approvedAt           DateTime?
-  deniedAt             DateTime?
-  cancelledAt          DateTime?
+model LeaveRequestAudit {
+  id             String       @id @default(cuid())
+  leaveRequestId String
+  leaveRequest   LeaveRequest @relation(fields: [leaveRequestId], references: [id])
+  changedById    String
+  changedBy      User         @relation("ChangedByUser", fields: [changedById], references: [id])
+  previousStatus LeaveStatus
+  newStatus      LeaveStatus
+  reason         String?
+  createdAt      DateTime     @default(now())
 }
 
 // --- HOLIDAY MODEL ---
@@ -112,6 +124,32 @@ model Holiday {
   createdAt     DateTime         @default(now())
 }
 
+// Model for defining weekly work/off days and hours
+model WorkSchedule {
+  id           String            @id @default(cuid())
+  name         String            @unique // e.g., "Default (9-5, Friday Off)"
+  isDefault    Boolean           @default(false)
+  
+  // Working Hours (using DateTime but we'll primarily care about the time)
+  // Stored in UTC. Example: 9 AM would be stored as a date with time 09:00:00Z
+  startTime    DateTime
+  endTime      DateTime
+
+  // Days of the week
+  isMonday    Boolean           @default(true)
+  isTuesday   Boolean           @default(true)
+  isWednesday Boolean           @default(true)
+  isThursday  Boolean           @default(true)
+  isFriday    Boolean           @default(false) // Default for Egypt
+  isSaturday  Boolean           @default(true)
+  isSunday    Boolean           @default(true)
+
+  employees    EmployeeProfile[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+}
+
+
 // --- ENUMS (pre-defined choices) ---
 enum Role {
   EMPLOYEE
@@ -121,10 +159,12 @@ enum Role {
 
 enum LeaveStatus {
   PENDING_MANAGER
+  PENDING_ADMIN
   APPROVED_BY_MANAGER
   APPROVED_BY_ADMIN
   DENIED
   CANCELLED
+  CANCELLATION_REQUESTED // NEW!
 }
 
 enum LeaveUnit {

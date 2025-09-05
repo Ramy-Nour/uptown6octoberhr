@@ -1,3 +1,5 @@
+// File: src/app/api/leave-balances/bulk-update/route.ts
+
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]/route";
@@ -12,7 +14,8 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { leaveTypeId, year, newTotal, applyToAll } = body;
+    // Renamed to be clearer, but same variable from your frontend
+    const { leaveTypeId, year, newTotal, protectManualChanges } = body; 
 
     if (!leaveTypeId || !year || newTotal === undefined) {
       return new NextResponse("Missing required fields", { status: 400 });
@@ -21,28 +24,58 @@ export async function POST(req: Request) {
     const yearInt = parseInt(year, 10);
     const newTotalFloat = parseFloat(newTotal);
 
-    // This is the base condition to find the right balances
-    let whereClause: any = {
-      leaveTypeId: leaveTypeId,
-      year: yearInt,
-    };
+    // 1. Get all employees
+    const allEmployeeIds = (await db.employeeProfile.findMany({ select: { id: true } })).map(e => e.id);
 
-    // If 'applyToAll' is false, we ONLY update balances that are NOT manual overrides.
-    if (applyToAll === false) {
-      whereClause.isManualOverride = false;
-    }
-    // If 'applyToAll' is true, we don't add any more conditions, so it updates everyone.
-
-    const result = await db.leaveBalance.updateMany({
-      where: whereClause,
-      data: {
-        total: newTotalFloat,
-        remaining: newTotalFloat, // Reset remaining to the new total
-        isManualOverride: false, // A bulk update always resets balances to the default state
+    // 2. Get all relevant balances for this year and leave type
+    const balancesToUpdate = await db.leaveBalance.findMany({
+      where: {
+        leaveTypeId: leaveTypeId,
+        year: yearInt,
+        // ALWAYS protect locked balances
+        isLocked: false, 
+        // Conditionally protect manually set balances
+        ...(protectManualChanges && { isManualOverride: false }),
       },
     });
 
-    return NextResponse.json({ message: `${result.count} employee balances were updated.` }, { status: 200 });
+    const updatePromises = balancesToUpdate.map(balance => {
+      const diff = newTotalFloat - balance.total;
+      return db.leaveBalance.update({
+        where: { id: balance.id },
+        data: {
+          total: newTotalFloat,
+          remaining: balance.remaining + diff,
+          isManualOverride: false,
+        },
+      });
+    });
+
+    // 3. Find employees who DON'T have a balance yet for this year
+    const employeesWithoutBalance = allEmployeeIds.filter(empId => 
+      !balancesToUpdate.some(b => b.employeeId === empId)
+    );
+    
+    const createPromises = employeesWithoutBalance.map(empId => {
+      return db.leaveBalance.create({
+        data: {
+          employeeId: empId,
+          leaveTypeId: leaveTypeId,
+          year: yearInt,
+          total: newTotalFloat,
+          remaining: newTotalFloat,
+        },
+      });
+    });
+
+    // 4. Execute all updates and creations in a single transaction
+    const [updateResult, createResult] = await db.$transaction([
+      ...updatePromises,
+      ...createPromises
+    ]);
+
+    const count = updatePromises.length + createPromises.length;
+    return NextResponse.json({ message: `${count} employee balances were updated.` }, { status: 200 });
 
   } catch (error) {
     console.error("[BULK_UPDATE_BALANCES_ERROR]", error);

@@ -21,7 +21,8 @@ export default function CreateEmployeePage() {
       })
 
       if (response.ok) {
-        router.push('/admin/employees')
+        // FIXED: Redirect to the main dashboard
+        router.push('/dashboard')
         router.refresh()
       } else {
         const error = await response.json()
