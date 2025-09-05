@@ -40,7 +40,7 @@ export async function PATCH(
     }
 
     // 🛡️ SECURITY CHECK 2: Ensure the request is in a cancellable state
-    const cancellableStatuses = ['PENDING_MANAGER', 'APPROVED_BY_MANAGER'];
+    const cancellableStatuses = ['PENDING_MANAGER'];
     if (!cancellableStatuses.includes(leaveRequestToCancel.status)) {
       return new NextResponse(`Request cannot be cancelled. Status is already '${leaveRequestToCancel.status}'`, { status: 400 });
     }

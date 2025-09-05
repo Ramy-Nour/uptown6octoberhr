@@ -2,7 +2,7 @@
 CREATE TYPE "Role" AS ENUM ('EMPLOYEE', 'ADMIN', 'SUPER_ADMIN');
 
 -- CreateEnum
-CREATE TYPE "LeaveStatus" AS ENUM ('PENDING_MANAGER', 'APPROVED_BY_MANAGER', 'APPROVED_BY_ADMIN', 'DENIED', 'CANCELLED');
+CREATE TYPE "LeaveStatus" AS ENUM ('PENDING_MANAGER', 'PENDING_ADMIN', 'APPROVED_BY_MANAGER', 'APPROVED_BY_ADMIN', 'DENIED', 'CANCELLED', 'CANCELLATION_PENDING_MANAGER', 'CANCELLATION_PENDING_ADMIN');
 
 -- CreateEnum
 CREATE TYPE "LeaveUnit" AS ENUM ('DAYS', 'HOURS');
@@ -34,6 +34,7 @@ CREATE TABLE "EmployeeProfile" (
     "position" TEXT NOT NULL,
     "startDate" TIMESTAMP(3) NOT NULL,
     "managerId" TEXT,
+    "workScheduleId" TEXT,
 
     CONSTRAINT "EmployeeProfile_pkey" PRIMARY KEY ("id")
 );
@@ -83,8 +84,22 @@ CREATE TABLE "LeaveRequest" (
     "approvedAt" TIMESTAMP(3),
     "deniedAt" TIMESTAMP(3),
     "cancelledAt" TIMESTAMP(3),
+    "statusBeforeCancellation" "LeaveStatus",
 
     CONSTRAINT "LeaveRequest_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "LeaveRequestAudit" (
+    "id" TEXT NOT NULL,
+    "leaveRequestId" TEXT NOT NULL,
+    "changedById" TEXT NOT NULL,
+    "previousStatus" "LeaveStatus" NOT NULL,
+    "newStatus" "LeaveStatus" NOT NULL,
+    "reason" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "LeaveRequestAudit_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -102,6 +117,26 @@ CREATE TABLE "Holiday" (
     CONSTRAINT "Holiday_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "WorkSchedule" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "isDefault" BOOLEAN NOT NULL DEFAULT false,
+    "startTime" TIMESTAMP(3) NOT NULL,
+    "endTime" TIMESTAMP(3) NOT NULL,
+    "isMonday" BOOLEAN NOT NULL DEFAULT true,
+    "isTuesday" BOOLEAN NOT NULL DEFAULT true,
+    "isWednesday" BOOLEAN NOT NULL DEFAULT true,
+    "isThursday" BOOLEAN NOT NULL DEFAULT true,
+    "isFriday" BOOLEAN NOT NULL DEFAULT false,
+    "isSaturday" BOOLEAN NOT NULL DEFAULT true,
+    "isSunday" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "WorkSchedule_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
@@ -114,11 +149,17 @@ CREATE UNIQUE INDEX "LeaveType_name_key" ON "LeaveType"("name");
 -- CreateIndex
 CREATE UNIQUE INDEX "LeaveBalance_employeeId_leaveTypeId_year_month_key" ON "LeaveBalance"("employeeId", "leaveTypeId", "year", "month");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "WorkSchedule_name_key" ON "WorkSchedule"("name");
+
 -- AddForeignKey
 ALTER TABLE "EmployeeProfile" ADD CONSTRAINT "EmployeeProfile_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "EmployeeProfile" ADD CONSTRAINT "EmployeeProfile_managerId_fkey" FOREIGN KEY ("managerId") REFERENCES "EmployeeProfile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EmployeeProfile" ADD CONSTRAINT "EmployeeProfile_workScheduleId_fkey" FOREIGN KEY ("workScheduleId") REFERENCES "WorkSchedule"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "LeaveBalance" ADD CONSTRAINT "LeaveBalance_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "EmployeeProfile"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -140,6 +181,12 @@ ALTER TABLE "LeaveRequest" ADD CONSTRAINT "LeaveRequest_deniedById_fkey" FOREIGN
 
 -- AddForeignKey
 ALTER TABLE "LeaveRequest" ADD CONSTRAINT "LeaveRequest_cancelledById_fkey" FOREIGN KEY ("cancelledById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "LeaveRequestAudit" ADD CONSTRAINT "LeaveRequestAudit_leaveRequestId_fkey" FOREIGN KEY ("leaveRequestId") REFERENCES "LeaveRequest"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "LeaveRequestAudit" ADD CONSTRAINT "LeaveRequestAudit_changedById_fkey" FOREIGN KEY ("changedById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Holiday" ADD CONSTRAINT "Holiday_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "EmployeeProfile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
