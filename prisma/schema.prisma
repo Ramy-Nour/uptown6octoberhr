@@ -95,7 +95,6 @@ model LeaveRequest {
   deniedAt           DateTime?
   cancelledAt        DateTime?
   auditTrail         LeaveRequestAudit[]
-  statusBeforeCancellation LeaveStatus?
 }
 
 model LeaveRequestAudit {
@@ -165,8 +164,7 @@ enum LeaveStatus {
   APPROVED_BY_ADMIN
   DENIED
   CANCELLED
-  CANCELLATION_PENDING_MANAGER
-  CANCELLATION_PENDING_ADMIN
+  CANCELLATION_REQUESTED // NEW!
 }
 
 enum LeaveUnit {
