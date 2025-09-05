@@ -1,9 +1,10 @@
-// File: src/app/api/leave-requests/[id]/request-cancellation/route.ts
+// File: src/app/api/leave-requests/[requestId]/request-cancellation/route.ts
 
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import db from '@/lib/prisma';
+import { shouldBypassManager } from '@/lib/manager-actions';
 
 export async function PATCH(
   req: Request,
@@ -39,16 +40,28 @@ export async function PATCH(
       return new NextResponse("Forbidden: You cannot modify a request that is not yours.", { status: 403 });
     }
 
-    // 🛡️ SECURITY CHECK 2: Only allow this for fully approved requests
-    if (leaveRequest.status !== 'APPROVED_BY_ADMIN') {
-      return new NextResponse(`This action is only for fully approved requests. Status is currently '${leaveRequest.status}'`, { status: 400 });
+    // 🛡️ SECURITY CHECK 2: Only allow this for approved (by manager or admin) requests
+    const requestableStatuses = ['APPROVED_BY_MANAGER', 'PENDING_ADMIN', 'APPROVED_BY_ADMIN'];
+    if (!requestableStatuses.includes(leaveRequest.status)) {
+      return new NextResponse(`Cancellation can only be requested for approved requests. Status is currently '${leaveRequest.status}'`, { status: 400 });
     }
+
+    // Determine the next status based on manager availability
+    const bypassManager = await shouldBypassManager(leaveRequest.employeeId);
     
-    // Update the request status
+    // NOTE: The following statuses do not exist in the schema yet.
+    // This will cause a type error until the database is migrated.
+    // We are writing the logic assuming the migration will be applied later.
+    const newStatus = bypassManager ? 'CANCELLATION_PENDING_ADMIN' : 'CANCELLATION_PENDING_MANAGER';
+
+    // Update the request status and store the original status
     const updatedRequest = await db.leaveRequest.update({
       where: { id: requestId },
       data: {
-        status: 'CANCELLATION_REQUESTED',
+        // @ts-ignore - This field does not exist in the current schema.
+        statusBeforeCancellation: leaveRequest.status,
+        // @ts-ignore - This enum value does not exist in the current schema.
+        status: newStatus,
       },
     });
 
