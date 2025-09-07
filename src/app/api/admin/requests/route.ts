@@ -12,29 +12,30 @@ export async function GET(req: Request) {
 
   try {
     const requests = await db.leaveRequest.findMany({
-        where: {
-            status: 'APPROVED_BY_MANAGER'
+      where: {
+        status: {
+          in: ['APPROVED_BY_MANAGER', 'PENDING_ADMIN'],
         },
-        include: {
-            employee: {
-                select: {
-                    firstName: true,
-                    lastName: true,
-                }
-            },
-            leaveType: {
-                select: {
-                    name: true,
-                }
-            }
+      },
+      include: {
+        employee: {
+          select: {
+            firstName: true,
+            lastName: true,
+          },
         },
-        orderBy: {
-            createdAt: 'asc'
-        }
+        leaveType: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
     });
 
     return NextResponse.json(requests);
-
   } catch (error) {
     console.error("[ADMIN_REQUESTS_GET_ERROR]", error);
     return new NextResponse("Internal Server Error", { status: 500 });
