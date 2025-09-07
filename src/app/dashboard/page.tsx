@@ -3,8 +3,8 @@
 'use client';
 
 import { useSession, signOut } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
+import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +20,6 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Badge, BadgeProps } from '@/components/ui/badge';
 import { LeaveStatus } from '@prisma/client';
-import { AdminHeader } from '@/components/AdminHeader';
 
 type Request = {
   id: string;
@@ -281,10 +280,61 @@ export default function DashboardPage() {
       );
   });
   
+  const pathname = usePathname();
+  const adminNav = useMemo(() => ([
+    { href: '/admin/employees', label: 'Manage Employees' },
+    { href: '/admin/employees/create', label: 'Add Employee' },
+    { href: '/dashboard/settings/leave-types', label: 'Leave Types' },
+    { href: '/dashboard/settings/leave-balances', label: 'Leave Balances' },
+    { href: '/admin/holidays', label: 'Holidays' },
+    { href: '/admin/work-schedules', label: 'Schedules' },
+    { href: '/dashboard/settings/bulk-update', label: 'Bulk Update' },
+    { href: '/dashboard/reports', label: 'Reports' },
+  ]), []);
+
+  const renderTopActionBar = () => {
+    if (!isHr) return null;
+    return (
+      <div className="flex items-center space-x-2 flex-wrap justify-end gap-2">
+        {adminNav.map((item) => {
+          const active = pathname?.startsWith(item.href);
+          return (
+            <Button
+              key={item.href}
+              asChild
+              variant={active ? 'default' : 'outline'}
+              size="sm"
+              className={cn(active ? 'bg-yellow-500 text-black hover:bg-yellow-500/90' : '')}
+            >
+              <Link href={item.href}>{item.label}</Link>
+            </Button>
+          );
+        })}
+        {session?.user.role === 'SUPER_ADMIN' && (
+          <Button
+            asChild
+            variant={pathname?.startsWith('/admin/manage-admins') ? 'default' : 'outline'}
+            size="sm"
+            className={cn(pathname?.startsWith('/admin/manage-admins') ? 'bg-yellow-500 text-black hover:bg-yellow-500/90' : '')}
+          >
+            <Link href="/admin/manage-admins">Manage Admins</Link>
+          </Button>
+        )}
+        <Button onClick={() => signOut({ callbackUrl: '/login' })}>Log Out</Button>
+      </div>
+    );
+  };
+
   return (
     <>
       <main className="p-4 sm:p-8 max-w-7xl mx-auto space-y-8">
-        <div className="flex justify-between items-center"><div><h1 className="text-3xl font-bold">Dashboard</h1><p className="text-muted-foreground">Welcome back, {session?.user?.email}</p></div><div className="flex items-center space-x-2 flex-wrap justify-end">{isHr && ( <> <Button asChild><Link href="/admin/employees">Manage Employees</Link></Button> <Button asChild variant="outline"><Link href="/admin/employees/create">Add Employee</Link></Button> <Button asChild variant="outline"><Link href="/dashboard/settings/leave-types">Leave Types</Link></Button> <Button asChild variant="outline"><Link href="/dashboard/settings/leave-balances">Leave Balances</Link></Button> <Button asChild variant="outline"><Link href="/admin/holidays">Holidays</Link></Button> <Button asChild variant="outline"><Link href="/admin/work-schedules">Schedules</Link></Button> <Button asChild variant="outline"><Link href="/dashboard/settings/bulk-update">Bulk Update</Link></Button> <Button asChild variant="outline"><Link href="/dashboard/reports">Reports</Link></Button> </> )}{session?.user.role === 'SUPER_ADMIN' && ( <Button asChild variant="outline"><Link href="/admin/manage-admins">Manage Admins</Link></Button> )}<Button onClick={() => signOut({ callbackUrl: '/login' })}>Log Out</Button></div></div>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold">Dashboard</h1>
+            <p className="text-muted-foreground">Welcome back, {session?.user?.email}</p>
+          </div>
+          {renderTopActionBar()}
+        </div>
         {error && <Card className="bg-destructive/10 border-destructive"><CardHeader><CardTitle className="text-destructive">An Error Occurred</CardTitle><CardDescription className="text-destructive">{error}</CardDescription></CardHeader></Card>}
         {isHr && (pendingHrRequests.length > 0 || pendingHrCancellations.length > 0) && (<Card className="border-red-500 bg-red-500/5"><CardHeader><CardTitle>Final HR Approvals</CardTitle><CardDescription>Manager-approved requests and cancellations waiting for final sign-off.</CardDescription></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Employee</TableHead><TableHead>Type</TableHead><TableHead>Dates</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{hrPendingContent}</TableBody></Table></CardContent></Card>)}
         {isManager && (<>
