@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]/route";
 import { db } from "@/lib/db";
+import { LeaveStatus } from "@prisma/client";
 
 // Fetches the leave request history for the logged-in user
 export async function GET(req: Request) {
@@ -44,6 +45,15 @@ export async function GET(req: Request) {
       where: whereClause,
       include: {
         leaveType: true,
+        approvedBy: { select: { email: true } },
+        deniedBy: { select: { email: true } },
+        cancelledBy: { select: { email: true } },
+        auditTrail: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            changedBy: { select: { email: true } }
+          }
+        }
       },
       orderBy: {
         createdAt: 'desc',
@@ -54,16 +64,16 @@ export async function GET(req: Request) {
 
   } catch (error) {
     console.error("[LEAVE_REQUESTS_GET_ERROR]", error);
-    return new NextResponse("Internal Server Error", { status: 500 });
+    return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
   }
 }
 
-// Creates a new leave request
+// Creates a new leave request and its first audit trail record
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
 
   if (!session || !session.user?.id) {
-    return new NextResponse("Unauthorized", { status: 401 });
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
   try {
@@ -71,14 +81,14 @@ export async function POST(req: Request) {
     const { leaveTypeId, startDate, endDate } = body;
 
     if (!leaveTypeId || !startDate || !endDate) {
-      return new NextResponse("Missing required fields", { status: 400 });
+      return NextResponse.json({ message: "Missing required fields" }, { status: 400 });
     }
 
     const start = new Date(startDate);
     const end = new Date(endDate);
 
     if (start > end) {
-      return new NextResponse("End date must be on or after start date", { status: 400 });
+      return NextResponse.json({ message: "End date must be on or after start date" }, { status: 400 });
     }
 
     const employeeProfile = await db.employeeProfile.findUnique({
@@ -87,7 +97,7 @@ export async function POST(req: Request) {
     });
 
     if (!employeeProfile) {
-      return new NextResponse("Employee profile not found", { status: 404 });
+      return NextResponse.json({ message: "Employee profile not found" }, { status: 404 });
     }
     
     let workSchedule = employeeProfile.workSchedule;
@@ -95,7 +105,7 @@ export async function POST(req: Request) {
       workSchedule = await db.workSchedule.findFirst({ where: { isDefault: true } });
     }
     if (!workSchedule) {
-      return new NextResponse("No default work schedule found. Please configure one.", { status: 500 });
+      return NextResponse.json({ message: "No default work schedule found. Please configure one." }, { status: 500 });
     }
 
     const holidays = await db.holiday.findMany({
@@ -115,7 +125,6 @@ export async function POST(req: Request) {
     while (currentDate <= end) {
       const dayOfWeek = currentDate.getDay();
       const dateString = currentDate.toISOString().split('T')[0];
-
       if (!weekendMap[dayOfWeek] && !holidayDates.has(dateString)) {
         workingDaysRequested++;
       }
@@ -123,7 +132,7 @@ export async function POST(req: Request) {
     }
     
     if (workingDaysRequested <= 0) {
-        return new NextResponse("Your request does not contain any working days.", { status: 400 });
+        return NextResponse.json({ message: "Your request does not contain any working days." }, { status: 400 });
     }
 
     const balance = await db.leaveBalance.findFirst({
@@ -135,10 +144,10 @@ export async function POST(req: Request) {
     });
 
     if (!balance || balance.remaining < workingDaysRequested) {
-      return new NextResponse(`Insufficient leave balance. Remaining: ${balance?.remaining || 0}, Requested Working Days: ${workingDaysRequested}`, { status: 400 });
+      return NextResponse.json({ message: `Insufficient leave balance. Remaining: ${balance?.remaining || 0}, Requested Working Days: ${workingDaysRequested}` }, { status: 400 });
     }
 
-    let status: 'PENDING_MANAGER' | 'PENDING_ADMIN' = 'PENDING_MANAGER';
+    let status: LeaveStatus = 'PENDING_MANAGER';
     let skipReason: string | null = null;
 
     if (!employeeProfile.managerId) {
@@ -159,21 +168,36 @@ export async function POST(req: Request) {
       }
     }
 
-    const leaveRequest = await db.leaveRequest.create({
-      data: {
-        employeeId: employeeProfile.id,
-        leaveTypeId: leaveTypeId,
-        startDate: start,
-        endDate: end,
-        status: status,
-        skipReason: skipReason,
-      },
+    const newLeaveRequest = await db.$transaction(async (prisma) => {
+      const leaveRequest = await prisma.leaveRequest.create({
+        data: {
+          employeeId: employeeProfile.id,
+          leaveTypeId: leaveTypeId,
+          startDate: start,
+          endDate: end,
+          status: status,
+          skipReason: skipReason,
+        },
+      });
+
+      await prisma.leaveRequestAudit.create({
+        data: {
+          leaveRequestId: leaveRequest.id,
+          changedById: session.user.id,
+          // On creation, the 'previous' status can be considered the same as the new one
+          previousStatus: leaveRequest.status, 
+          newStatus: leaveRequest.status,
+          reason: "Request submitted by employee.",
+        },
+      });
+      
+      return leaveRequest;
     });
 
-    return NextResponse.json(leaveRequest, { status: 201 });
+    return NextResponse.json(newLeaveRequest, { status: 201 });
 
   } catch (error) {
     console.error("[LEAVE_REQUEST_POST_ERROR]", error);
-    return new NextResponse("Internal Server Error", { status: 500 });
+    return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
   }
 }

@@ -57,23 +57,25 @@ export function EmployeeForm({ onSubmit, isLoading = false }: EmployeeFormProps)
     },
   })
 
-  useEffect(() => {
-    const fetchEmployees = async () => {
-      try {
-        const response = await fetch('/api/employees')
-        if (response.ok) {
-          const data = await response.json()
-          setEmployees(data)
-        }
-      } catch (error) {
-        console.error('Failed to fetch employees:', error)
-      } finally {
-        setLoading(false)
+ useEffect(() => {
+  const fetchEmployees = async () => {
+    try {
+      const response = await fetch('/api/employees/list'); // ✅ Correct endpoint
+      if (response.ok) {
+        const data: Employee[] = await response.json();
+        setEmployees(data);
+      } else {
+        console.error('Failed to load employees:', await response.text());
       }
+    } catch (error) {
+      console.error('Failed to fetch employees:', error);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    fetchEmployees()
-  }, [])
+  fetchEmployees();
+}, []);
 
   const onFormSubmit = async (data: EmployeeFormValues) => {
     await onSubmit(data)

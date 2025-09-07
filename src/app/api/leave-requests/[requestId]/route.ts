@@ -1,134 +1,102 @@
-// File: src/app/api/leave-requests/[id]/route.ts
+// File: src/app/api/leave-requests/[requestId]/route.ts
 
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import db from '@/lib/prisma';
+import { LeaveStatus } from '@prisma/client';
 
 export async function PATCH(
   req: Request,
   { params }: { params: { requestId: string } }
 ) {
   const session = await getServerSession(authOptions);
-  const sessionUserRole = session?.user?.role;
-
   if (!session || !session.user?.id) {
-    return new NextResponse("Unauthorized", { status: 401 });
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
   try {
     const { status, denialReason } = await req.json();
     const { requestId } = params;
-
-    const userProfile = await db.employeeProfile.findUnique({
-      where: { userId: session.user.id }
-    });
-
-    if (!userProfile) {
-      return new NextResponse("User profile not found", { status: 404 });
-    }
+    const newStatus = status as LeaveStatus;
 
     const leaveRequestToUpdate = await db.leaveRequest.findUnique({
       where: { id: requestId },
       include: { 
         employee: { include: { workSchedule: true } }, 
-        leaveType: true 
       }
     });
 
     if (!leaveRequestToUpdate) {
-      return new NextResponse("Leave request not found", { status: 404 });
+      return NextResponse.json({ message: "Leave request not found" }, { status: 404 });
     }
 
-    const isManagerOfEmployee = leaveRequestToUpdate.employee.managerId === userProfile.id;
-    const isAdminOrSuperAdmin = sessionUserRole === 'ADMIN' || sessionUserRole === 'SUPER_ADMIN';
-
-    if ((status === 'APPROVED_BY_MANAGER' || status === 'DENIED') && !isManagerOfEmployee && !isAdminOrSuperAdmin) {
-      return new NextResponse("Forbidden: You are not the manager for this employee", { status: 403 });
-    }
-    if (status === 'APPROVED_BY_ADMIN' && !isAdminOrSuperAdmin) {
-      return new NextResponse("Forbidden: Only Admins can give final approval", { status: 403 });
-    }
-
-    if (status === 'APPROVED_BY_MANAGER') {
-      await db.leaveRequest.update({
+    // Use a transaction to update the request and create an audit record
+    await db.$transaction(async (prisma) => {
+      // First, update the leave request itself
+      await prisma.leaveRequest.update({
         where: { id: requestId },
-        data: { status: 'APPROVED_BY_MANAGER' }
-      });
-    } else if (status === 'DENIED') {
-      await db.leaveRequest.update({
-        where: { id: requestId },
-        data: { 
-          status: 'DENIED',
-          denialReason: denialReason || "No reason provided"
-        }
-      });
-    } else if (status === 'APPROVED_BY_ADMIN') {
-      const start = new Date(leaveRequestToUpdate.startDate);
-      const end = new Date(leaveRequestToUpdate.endDate);
-
-      // --- START: Smart Day Calculation Logic ---
-      let workSchedule = leaveRequestToUpdate.employee.workSchedule;
-      if (!workSchedule) {
-        workSchedule = await db.workSchedule.findFirst({ where: { isDefault: true } });
-      }
-      if (!workSchedule) {
-        return new NextResponse("No default work schedule found.", { status: 500 });
-      }
-
-      const holidays = await db.holiday.findMany({
-        where: { date: { gte: start, lte: end } },
-      });
-      const holidayDates = new Set(holidays.map(h => h.date.toISOString().split('T')[0]));
-      
-      let workingDaysRequested = 0;
-      let currentDate = new Date(start);
-      const weekendMap = [!workSchedule.isSunday, !workSchedule.isMonday, !workSchedule.isTuesday, !workSchedule.isWednesday, !workSchedule.isThursday, !workSchedule.isFriday, !workSchedule.isSaturday];
-
-      while (currentDate <= end) {
-        const dayOfWeek = currentDate.getDay();
-        const dateString = currentDate.toISOString().split('T')[0];
-        if (!weekendMap[dayOfWeek] && !holidayDates.has(dateString)) {
-          workingDaysRequested++;
-        }
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
-      // --- END: Smart Day Calculation Logic ---
-
-      if (workingDaysRequested <= 0) {
-        return new NextResponse("This request contains no working days to deduct.", { status: 400 });
-      }
-      
-      const balance = await db.leaveBalance.findFirst({
-        where: {
-          employeeId: leaveRequestToUpdate.employeeId,
-          leaveTypeId: leaveRequestToUpdate.leaveTypeId,
-          year: start.getFullYear(),
+        data: {
+          status: newStatus,
+          denialReason: newStatus === 'DENIED' ? denialReason : null,
+          deniedById: newStatus === 'DENIED' ? session.user.id : null,
+          deniedAt: newStatus === 'DENIED' ? new Date() : null,
+          approvedById: (newStatus === 'APPROVED_BY_MANAGER' || newStatus === 'APPROVED_BY_ADMIN') ? session.user.id : null,
+          approvedAt: (newStatus === 'APPROVED_BY_MANAGER' || newStatus === 'APPROVED_BY_ADMIN') ? new Date() : null,
         }
       });
 
-      if (!balance || balance.remaining < workingDaysRequested) {
-        return new NextResponse(`Employee has insufficient balance. Remaining: ${balance?.remaining || 0}, Required: ${workingDaysRequested}`, { status: 400 });
-      }
+      // Second, create the audit trail record for this action
+      await prisma.leaveRequestAudit.create({
+        data: {
+          leaveRequestId: requestId,
+          changedById: session.user.id,
+          previousStatus: leaveRequestToUpdate.status,
+          newStatus: newStatus,
+          reason: newStatus === 'DENIED' ? denialReason : `Request status updated by ${session.user.role?.toLowerCase()}`,
+        }
+      });
 
-      await db.$transaction([
-        db.leaveRequest.update({
-          where: { id: requestId },
-          data: { status: 'APPROVED_BY_ADMIN', denialReason: null }
-        }),
-        db.leaveBalance.update({
-          where: { id: balance.id },
-          data: { remaining: { decrement: workingDaysRequested } } // Use the correct calculated days
-        })
-      ]);
-    } else {
-      return new NextResponse("Invalid status update", { status: 400 });
-    }
+      // Third, if it's the FINAL admin approval, calculate working days and deduct from the balance
+      if (newStatus === 'APPROVED_BY_ADMIN') {
+        const start = new Date(leaveRequestToUpdate.startDate);
+        const end = new Date(leaveRequestToUpdate.endDate);
+        let workSchedule = leaveRequestToUpdate.employee.workSchedule || await prisma.workSchedule.findFirst({ where: { isDefault: true } });
+        if (!workSchedule) throw new Error("No default work schedule found.");
+
+        const holidays = await prisma.holiday.findMany({ where: { date: { gte: start, lte: end } } });
+        const holidayDates = new Set(holidays.map(h => h.date.toISOString().split('T')[0]));
+        
+        let workingDaysRequested = 0;
+        let currentDate = new Date(start);
+        const weekendMap = [!workSchedule.isSunday, !workSchedule.isMonday, !workSchedule.isTuesday, !workSchedule.isWednesday, !workSchedule.isThursday, !workSchedule.isFriday, !workSchedule.isSaturday];
+
+        while (currentDate <= end) {
+          const dayOfWeek = currentDate.getDay();
+          const dateString = currentDate.toISOString().split('T')[0];
+          if (!weekendMap[dayOfWeek] && !holidayDates.has(dateString)) {
+            workingDaysRequested++;
+          }
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        if (workingDaysRequested > 0) {
+          const balance = await prisma.leaveBalance.findFirst({
+            where: { employeeId: leaveRequestToUpdate.employeeId, leaveTypeId: leaveRequestToUpdate.leaveTypeId, year: start.getFullYear() }
+          });
+          if (!balance) throw new Error("Could not find balance to deduct from.");
+          await prisma.leaveBalance.update({
+            where: { id: balance.id },
+            data: { remaining: { decrement: workingDaysRequested } }
+          });
+        }
+      }
+    });
 
     return new NextResponse(null, { status: 204 });
 
   } catch (error) {
     console.error("[LEAVE_REQUEST_PATCH_ERROR]", error);
-    return new NextResponse("Internal Server Error", { status: 500 });
+    return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
   }
 }

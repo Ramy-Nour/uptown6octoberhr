@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import db from '@/lib/prisma';
-import { shouldBypassManager } from '@/lib/manager-actions';
+import { getBypassDetails } from '@/lib/manager-actions';
 
 export async function PATCH(
   req: Request,
@@ -13,7 +13,7 @@ export async function PATCH(
   const session = await getServerSession(authOptions);
 
   if (!session || !session.user?.id) {
-    return new NextResponse("Unauthorized", { status: 401 });
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
   try {
@@ -24,7 +24,7 @@ export async function PATCH(
     });
 
     if (!userProfile) {
-      return new NextResponse("Employee profile not found", { status: 404 });
+      return NextResponse.json({ message: "Employee profile not found" }, { status: 404 });
     }
 
     const leaveRequest = await db.leaveRequest.findUnique({
@@ -32,43 +32,49 @@ export async function PATCH(
     });
 
     if (!leaveRequest) {
-      return new NextResponse("Leave request not found", { status: 404 });
+      return NextResponse.json({ message: "Leave request not found" }, { status: 404 });
     }
-
-    // 🛡️ SECURITY CHECK 1: Ensure the user owns this request
     if (leaveRequest.employeeId !== userProfile.id) {
-      return new NextResponse("Forbidden: You cannot modify a request that is not yours.", { status: 403 });
+      return NextResponse.json({ message: "Forbidden: You cannot modify a request that is not yours." }, { status: 403 });
     }
-
-    // 🛡️ SECURITY CHECK 2: Only allow this for approved (by manager or admin) requests
-    const requestableStatuses = ['APPROVED_BY_MANAGER', 'PENDING_ADMIN', 'APPROVED_BY_ADMIN'];
-    if (!requestableStatuses.includes(leaveRequest.status)) {
-      return new NextResponse(`Cancellation can only be requested for approved requests. Status is currently '${leaveRequest.status}'`, { status: 400 });
+    if (leaveRequest.status !== 'APPROVED_BY_ADMIN') {
+      return NextResponse.json({ message: `This action is only for fully approved requests. Status is currently '${leaveRequest.status}'` }, { status: 400 });
     }
-
-    // Determine the next status based on manager availability
-    const bypassManager = await shouldBypassManager(leaveRequest.employeeId);
     
-    // NOTE: The following statuses do not exist in the schema yet.
-    // This will cause a type error until the database is migrated.
-    // We are writing the logic assuming the migration will be applied later.
-    const newStatus = bypassManager ? 'CANCELLATION_PENDING_ADMIN' : 'CANCELLATION_PENDING_MANAGER';
+    const { bypass, reason } = await getBypassDetails(leaveRequest.employeeId);
+    
+    const newStatus = bypass 
+      ? 'CANCELLATION_PENDING_ADMIN' 
+      : 'CANCELLATION_PENDING_MANAGER';
 
-    // Update the request status and store the original status
-    const updatedRequest = await db.leaveRequest.update({
-      where: { id: requestId },
-      data: {
-        // @ts-ignore - This field does not exist in the current schema.
-        statusBeforeCancellation: leaveRequest.status,
-        // @ts-ignore - This enum value does not exist in the current schema.
-        status: newStatus,
-      },
+    // Use a transaction to update the request and create an audit record
+    const updatedRequest = await db.$transaction(async (prisma) => {
+      const updated = await prisma.leaveRequest.update({
+        where: { id: requestId },
+        data: {
+          status: newStatus,
+          statusBeforeCancellation: leaveRequest.status,
+          cancellationReason: "Cancellation requested by employee.",
+        },
+      });
+
+      await prisma.leaveRequestAudit.create({
+        data: {
+          leaveRequestId: requestId,
+          changedById: session.user.id,
+          previousStatus: leaveRequest.status,
+          newStatus: newStatus,
+          reason: "Cancellation requested by employee.",
+        },
+      });
+
+      return updated;
     });
 
     return NextResponse.json(updatedRequest);
 
   } catch (error) {
     console.error("[LEAVE_REQUEST_CANCELLATION_ERROR]", error);
-    return new NextResponse("Internal Server Error", { status: 500 });
+    return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
   }
 }

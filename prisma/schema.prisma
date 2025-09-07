@@ -14,6 +14,7 @@ model User {
   email             String              @unique
   password          String
   role              Role                @default(EMPLOYEE)
+  isActive          Boolean             @default(true) // NEW FIELD!
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
   profile           EmployeeProfile?
@@ -38,8 +39,6 @@ model EmployeeProfile {
   leaveRequests  LeaveRequest[]
   leaveBalances  LeaveBalance[]
   holidays       Holiday[]
-  
-  // Link to the employee's specific work schedule
   workScheduleId String?
   workSchedule   WorkSchedule?  @relation(fields: [workScheduleId], references: [id])
 }
@@ -72,29 +71,30 @@ model LeaveBalance {
 }
 
 model LeaveRequest {
-  id                 String              @id @default(cuid())
-  employeeId         String
-  employee           EmployeeProfile     @relation(fields: [employeeId], references: [id])
-  leaveTypeId        String
-  leaveType          LeaveType           @relation(fields: [leaveTypeId], references: [id])
-  startDate          DateTime
-  endDate            DateTime
-  status             LeaveStatus         @default(PENDING_MANAGER)
-  denialReason       String?
-  cancellationReason String?
-  skipReason         String?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  approvedById       String?
-  deniedById         String?
-  cancelledById      String?
-  approvedBy         User?               @relation("ApprovedByUser", fields: [approvedById], references: [id])
-  deniedBy           User?               @relation("DeniedByUser", fields: [deniedById], references: [id])
-  cancelledBy        User?               @relation("CancelledByUser", fields: [cancelledById], references: [id])
-  approvedAt         DateTime?
-  deniedAt           DateTime?
-  cancelledAt        DateTime?
-  auditTrail         LeaveRequestAudit[]
+  id                         String              @id @default(cuid())
+  employeeId                 String
+  employee                   EmployeeProfile     @relation(fields: [employeeId], references: [id])
+  leaveTypeId                String
+  leaveType                  LeaveType           @relation(fields: [leaveTypeId], references: [id])
+  startDate                  DateTime
+  endDate                    DateTime
+  status                     LeaveStatus         @default(PENDING_MANAGER)
+  statusBeforeCancellation   LeaveStatus?        // NEW FIELD!
+  denialReason               String?
+  cancellationReason         String?
+  skipReason                 String?
+  createdAt                  DateTime            @default(now())
+  updatedAt                  DateTime            @updatedAt
+  approvedById               String?
+  deniedById                 String?
+  cancelledById              String?
+  approvedBy                 User?               @relation("ApprovedByUser", fields: [approvedById], references: [id])
+  deniedBy                   User?               @relation("DeniedByUser", fields: [deniedById], references: [id])
+  cancelledBy                User?               @relation("CancelledByUser", fields: [cancelledById], references: [id])
+  approvedAt                 DateTime?
+  deniedAt                   DateTime?
+  cancelledAt                DateTime?
+  auditTrail                 LeaveRequestAudit[]
 }
 
 model LeaveRequestAudit {
@@ -127,23 +127,17 @@ model Holiday {
 // Model for defining weekly work/off days and hours
 model WorkSchedule {
   id           String            @id @default(cuid())
-  name         String            @unique // e.g., "Default (9-5, Friday Off)"
+  name         String            @unique
   isDefault    Boolean           @default(false)
-  
-  // Working Hours (using DateTime but we'll primarily care about the time)
-  // Stored in UTC. Example: 9 AM would be stored as a date with time 09:00:00Z
   startTime    DateTime
   endTime      DateTime
-
-  // Days of the week
-  isMonday    Boolean           @default(true)
-  isTuesday   Boolean           @default(true)
-  isWednesday Boolean           @default(true)
-  isThursday  Boolean           @default(true)
-  isFriday    Boolean           @default(false) // Default for Egypt
-  isSaturday  Boolean           @default(true)
-  isSunday    Boolean           @default(true)
-
+  isMonday     Boolean           @default(true)
+  isTuesday    Boolean           @default(true)
+  isWednesday  Boolean           @default(true)
+  isThursday   Boolean           @default(true)
+  isFriday     Boolean           @default(false)
+  isSaturday   Boolean           @default(true)
+  isSunday     Boolean           @default(true)
   employees    EmployeeProfile[]
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
@@ -157,6 +151,7 @@ enum Role {
   SUPER_ADMIN
 }
 
+// UPDATED: Replaced CANCELLATION_REQUESTED with more specific statuses
 enum LeaveStatus {
   PENDING_MANAGER
   PENDING_ADMIN
@@ -164,7 +159,8 @@ enum LeaveStatus {
   APPROVED_BY_ADMIN
   DENIED
   CANCELLED
-  CANCELLATION_REQUESTED // NEW!
+  CANCELLATION_PENDING_MANAGER
+  CANCELLATION_PENDING_ADMIN
 }
 
 enum LeaveUnit {

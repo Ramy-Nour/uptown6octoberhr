@@ -73,6 +73,7 @@ CREATE TABLE "LeaveRequest" (
     "startDate" TIMESTAMP(3) NOT NULL,
     "endDate" TIMESTAMP(3) NOT NULL,
     "status" "LeaveStatus" NOT NULL DEFAULT 'PENDING_MANAGER',
+    "statusBeforeCancellation" "LeaveStatus",
     "denialReason" TEXT,
     "cancellationReason" TEXT,
     "skipReason" TEXT,
@@ -84,7 +85,6 @@ CREATE TABLE "LeaveRequest" (
     "approvedAt" TIMESTAMP(3),
     "deniedAt" TIMESTAMP(3),
     "cancelledAt" TIMESTAMP(3),
-    "statusBeforeCancellation" "LeaveStatus",
 
     CONSTRAINT "LeaveRequest_pkey" PRIMARY KEY ("id")
 );

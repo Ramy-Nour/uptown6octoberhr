@@ -1,4 +1,5 @@
 // File: src/app/api/manager/pending-approvals/route.ts
+
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -16,6 +17,7 @@ export async function GET(req: Request) {
     if (!userProfile) {
         return NextResponse.json([]);
     }
+
     const pendingRequests = await db.leaveRequest.findMany({
         where: {
             status: 'PENDING_MANAGER',
@@ -29,7 +31,29 @@ export async function GET(req: Request) {
         },
         orderBy: { createdAt: 'asc' }
     });
-    return NextResponse.json(pendingRequests);
+
+    // For each pending request, check for overlaps
+    const requestsWithOverlapInfo = await Promise.all(
+      pendingRequests.map(async (request) => {
+        const overlappingRequest = await db.leaveRequest.findFirst({
+          where: {
+            // Check for requests from other employees on the same team
+            employee: {
+              managerId: userProfile.id,
+              id: { not: request.employeeId } // Exclude the current employee
+            },
+            status: 'APPROVED_BY_ADMIN',
+            // Check for date overlap
+            startDate: { lte: request.endDate },
+            endDate: { gte: request.startDate },
+          },
+        });
+        return { ...request, hasOverlap: !!overlappingRequest };
+      })
+    );
+
+    return NextResponse.json(requestsWithOverlapInfo);
+
   } catch (error) {
     console.error("[MANAGER_PENDING_APPROVALS_ERROR]", error);
     return new NextResponse("Internal Server Error", { status: 500 });
