@@ -1,9 +1,9 @@
+// src/app/api/employees/[id]/route.ts
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]/route";
 import { db } from "@/lib/db";
 
-// This is the corrected GET function.
 export async function GET(
   req: Request,
   { params }: { params: { id: string } }
@@ -15,8 +15,6 @@ export async function GET(
   }
 
   try {
-    // THE FIX: We now correctly look for the employee by the profile's own ID,
-    // not by the userId. This makes it consistent with the DELETE function.
     const employee = await db.employeeProfile.findUnique({
       where: { id: params.id }, 
       include: {
@@ -50,7 +48,7 @@ export async function GET(
   }
 }
 
-// Your original, working PATCH function
+// Fixed PATCH function - changed hireDate to startDate
 export async function PATCH(
   req: Request,
   { params }: { params: { id: string } }
@@ -63,7 +61,8 @@ export async function PATCH(
 
   try {
     const body = await req.json();
-    const { email, firstName, lastName, position, hireDate, managerId } = body;
+    // Changed from hireDate to startDate
+    const { email, firstName, lastName, position, startDate, managerId } = body;
 
     // First, find the employee profile using the ID from the URL.
     const profile = await db.employeeProfile.findUnique({
@@ -75,7 +74,6 @@ export async function PATCH(
     }
 
     // --- Start of Transaction ---
-    // We use a transaction to make sure both database updates succeed or fail together.
     await db.$transaction(async (tx) => {
       // Update 1: Update the EmployeeProfile table
       await tx.employeeProfile.update({
@@ -84,14 +82,15 @@ export async function PATCH(
               firstName,
               lastName,
               position,
-              hireDate: hireDate ? new Date(hireDate) : null,
+              // Changed from hireDate to startDate
+              startDate: startDate ? new Date(startDate) : null,
               managerId,
           }
       });
 
       // Update 2: Update the email on the related User table
       await tx.user.update({
-        where: { id: profile.userId }, // Use the stable userId
+        where: { id: profile.userId },
         data: { email },
       });
     });
@@ -104,7 +103,6 @@ export async function PATCH(
   }
 }
 
-// Your original, working DELETE function
 export async function DELETE(
   req: Request,
   { params }: { params: { id: string } }

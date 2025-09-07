@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { db } from '@/lib/db'; // ✅ Named import
+import { db } from '@/lib/db';
 
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
@@ -12,30 +12,34 @@ export async function GET(request: Request) {
   }
 
   try {
-    const employees = await db.user.findMany({
-      where: { isActive: true },
-      select: {
-        profile: {
+    // Query EmployeeProfile directly and include user email
+    const employees = await db.employeeProfile.findMany({
+      where: {
+        user: {
+          isActive: true,
+        },
+      },
+      include: {
+        user: {
           select: {
-            id: true,
-            firstName: true,
-            lastName: true,
+            email: true,
           },
         },
-        email: true,
+      },
+      orderBy: {
+        firstName: 'asc',
       },
     });
 
-    const formattedEmployees = employees
-      .map(emp => ({
-        id: emp.profile!.id,
-        firstName: emp.profile!.firstName,
-        lastName: emp.profile!.lastName,
-        user: {
-          email: emp.email,
-        },
-      }))
-      .filter(emp => emp.id); // Remove any without a profile
+    // Format the response to match what the frontend expects
+    const formattedEmployees = employees.map(emp => ({
+      id: emp.id,
+      firstName: emp.firstName,
+      lastName: emp.lastName,
+      user: {
+        email: emp.user.email,
+      },
+    }));
 
     return NextResponse.json(formattedEmployees);
   } catch (error) {

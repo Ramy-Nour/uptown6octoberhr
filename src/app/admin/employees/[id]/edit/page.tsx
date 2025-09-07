@@ -12,7 +12,6 @@ import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 
-// This interface now matches the data from /api/employees
 interface EmployeeData {
   id: string;
   managerId: string | null;
@@ -22,10 +21,9 @@ interface EmployeeData {
   firstName: string;
   lastName: string;
   position: string;
-  hireDate: string | null;
+  startDate: string | null; // Changed from hireDate to startDate
 }
 
-// This interface is for the dropdown list
 interface ManagerOption {
   id: string;
   firstName: string;
@@ -43,7 +41,7 @@ export default function EditEmployeePage() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [position, setPosition] = useState('');
-  const [hireDate, setHireDate] = useState<Date | undefined>(undefined);
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined); // Changed from hireDate to startDate
   const [managerId, setManagerId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -58,7 +56,7 @@ export default function EditEmployeePage() {
           setLastName(data.lastName);
           setPosition(data.position);
           setManagerId(data.managerId);
-          setHireDate(data.hireDate ? new Date(data.hireDate) : undefined);
+          setStartDate(data.startDate ? new Date(data.startDate) : undefined); // Changed from hireDate to startDate
         }
 
         const listResponse = await fetch('/api/employees/list');
@@ -82,7 +80,7 @@ export default function EditEmployeePage() {
       firstName,
       lastName,
       position,
-      hireDate,
+      startDate, // Changed from hireDate to startDate
       managerId: managerId === 'none' ? null : managerId,
     };
 
@@ -97,7 +95,8 @@ export default function EditEmployeePage() {
         router.push('/admin/employees');
         router.refresh();
       } else {
-        alert('Failed to update employee');
+        const errorData = await response.json();
+        alert(errorData.message || 'Failed to update employee');
       }
     } catch (error) {
       alert('Failed to update employee');
@@ -137,16 +136,16 @@ export default function EditEmployeePage() {
             </div>
 
             <div>
-              <Label htmlFor="hireDate">Start Date</Label>
+              <Label htmlFor="startDate">Start Date</Label> {/* Changed from hireDate to startDate */}
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="w-full justify-start text-left font-normal">
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {hireDate ? format(hireDate, 'PPP') : <span>Pick a date</span>}
+                    {startDate ? format(startDate, 'PPP') : <span>Pick a date</span>} {/* Changed from hireDate to startDate */}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0">
-                  <Calendar mode="single" selected={hireDate} onSelect={setHireDate} initialFocus />
+                  <Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus /> {/* Changed from hireDate to startDate */}
                 </PopoverContent>
               </Popover>
             </div>
