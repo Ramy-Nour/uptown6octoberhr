@@ -1,12 +1,12 @@
 // File: src/components/headers/EmployeeHeader.tsx
 'use client';
 
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
 export function EmployeeHeader() {
-  const {  session } = useSession();
+  const { data: session } = useSession();
 
   return (
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-white border-b">

@@ -1,12 +1,21 @@
 // File: src/components/headers/AdminHeader.tsx
 'use client';
 
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 export function AdminHeader() {
   const { data: session } = useSession();
+  const pathname = usePathname();
+
+  const nav = [
+    { href: '/admin/employees', label: 'Employees' },
+    { href: '/admin/holidays', label: 'Holidays' },
+    { href: '/admin/work-schedules', label: 'Schedules' },
+  ];
 
   return (
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-white border-b">
@@ -19,18 +28,23 @@ export function AdminHeader() {
         </p>
       </div>
       <div className="flex items-center space-x-2 flex-wrap justify-end gap-2">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/admin/employees">Employees</Link>
-        </Button>
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/admin/holidays">Holidays</Link>
-        </Button>
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/admin/work-schedules">Schedules</Link>
-        </Button>
-        <Button 
-          onClick={() => signOut({ callbackUrl: '/login' })} 
-          variant="destructive" 
+        {nav.map((item) => {
+          const active = pathname?.startsWith(item.href);
+          return (
+            <Button
+              key={item.href}
+              asChild
+              size="sm"
+              variant={active ? 'secondary' : 'ghost'}
+              className={cn(active && 'ring-1 ring-ring')}
+            >
+              <Link href={item.href}>{item.label}</Link>
+            </Button>
+          );
+        })}
+        <Button
+          onClick={() => signOut({ callbackUrl: '/login' })}
+          variant="destructive"
           size="sm"
         >
           Log Out
