@@ -44,6 +44,7 @@ type Request = {
       changedBy: { email: string };
   }[];
   hasOverlap?: boolean;
+  skipReason?: string | null;
 }
 type Balance = {
   id: string;
@@ -186,7 +187,7 @@ export default function DashboardPage() {
     }
     setIsDenyDialogOpen(false);
     setDenialReason('');
-    setOtherReason('');
+       setOtherReason('');
     setIsCancellationRejection(false);
   };
   
@@ -263,8 +264,20 @@ export default function DashboardPage() {
 
   const hrPendingContent = pendingHrRequests.concat(pendingHrCancellations).map(req => {
       const isCancellation = req.status === 'CANCELLATION_PENDING_ADMIN';
+      const showSkip = req.status === 'PENDING_ADMIN' && req.skipReason;
       return (
-        <TableRow key={req.id} className={isCancellation ? "bg-yellow-100" : ""}><TableCell>{req.employee.firstName} {req.employee.lastName}</TableCell><TableCell>{req.leaveType.name} {isCancellation && '(Cancellation)'}</TableCell><TableCell>{format(new Date(req.startDate), 'PPP')} - {format(new Date(req.endDate), 'PPP')}</TableCell><TableCell className="text-right space-x-2"><Button size="sm" variant="outline" onClick={() => { setCurrentRequestToAction(req); setIsDenyDialogOpen(true); setIsCancellationRejection(isCancellation); }}>Deny</Button><Button size="sm" onClick={() => isCancellation ? handleCancellationApproval(req.id, 'APPROVE') : handleRequestAction(req.id, 'APPROVED_BY_ADMIN')}>Final Approve</Button></TableCell></TableRow>
+        <TableRow key={req.id} className={isCancellation ? "bg-yellow-100" : ""}>
+          <TableCell>
+            {req.employee.firstName} {req.employee.lastName}
+            {showSkip && (<div className="text-xs text-muted-foreground mt-1">Override: {req.skipReason}</div>)}
+          </TableCell>
+          <TableCell>{req.leaveType.name} {isCancellation && '(Cancellation)'}</TableCell>
+          <TableCell>{format(new Date(req.startDate), 'PPP')} - {format(new Date(req.endDate), 'PPP')}</TableCell>
+          <TableCell className="text-right space-x-2">
+            <Button size="sm" variant="outline" onClick={() => { setCurrentRequestToAction(req); setIsDenyDialogOpen(true); setIsCancellationRejection(isCancellation); }}>Deny</Button>
+            <Button size="sm" onClick={() => isCancellation ? handleCancellationApproval(req.id, 'APPROVE') : handleRequestAction(req.id, 'APPROVED_BY_ADMIN')}>Final Approve</Button>
+          </TableCell>
+        </TableRow>
       );
   });
   
