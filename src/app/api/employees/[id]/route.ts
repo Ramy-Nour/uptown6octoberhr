@@ -1,4 +1,3 @@
-// src/app/api/employees/[id]/route.ts
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]/route";
@@ -48,7 +47,6 @@ export async function GET(
   }
 }
 
-// Fixed PATCH function - changed hireDate to startDate
 export async function PATCH(
   req: Request,
   { params }: { params: { id: string } }
@@ -61,7 +59,6 @@ export async function PATCH(
 
   try {
     const body = await req.json();
-    // Changed from hireDate to startDate
     const { email, firstName, lastName, position, startDate, managerId } = body;
 
     // First, find the employee profile using the ID from the URL.
@@ -82,7 +79,6 @@ export async function PATCH(
               firstName,
               lastName,
               position,
-              // Changed from hireDate to startDate
               startDate: startDate ? new Date(startDate) : null,
               managerId,
           }
@@ -113,9 +109,29 @@ export async function DELETE(
   }
 
   try {
-    const profile = await db.employeeProfile.findUnique({ where: { id: params.id }});
+    // Fetch the employee profile including the associated user's role
+    const profile = await db.employeeProfile.findUnique({
+      where: { id: params.id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            role: true,
+          },
+        },
+      },
+    });
+    
     if (!profile) {
-        return NextResponse.json({ message: "Employee not found" }, { status: 404 });
+      return NextResponse.json({ message: "Employee not found" }, { status: 404 });
+    }
+
+    // Security check: Prevent non-super admins from deactivating super admins
+    if (profile.user.role === 'SUPER_ADMIN' && session.user.role !== 'SUPER_ADMIN') {
+      return NextResponse.json(
+        { message: "Forbidden: Only SUPER_ADMIN can deactivate another SUPER_ADMIN" }, 
+        { status: 403 }
+      );
     }
 
     await db.user.update({
