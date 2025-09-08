@@ -240,7 +240,7 @@ export default function HolidayManagementPage() {
                     Cancel
                   </button>
                 )}
-                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                <button type="submit" className="px-4 py-2 bg-brand text-white rounded-md hover:bg-brand/90">
                   {editingHolidayId ? 'Update Holiday' : 'Add Holiday'}
                 </button>
             </div>

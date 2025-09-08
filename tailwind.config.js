@@ -51,6 +51,8 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Brand color (Uptown October): HEX #A97E34
+        brand: "#A97E34",
       },
       borderRadius: {
         lg: "var(--radius)",

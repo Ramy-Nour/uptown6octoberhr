@@ -30,7 +30,18 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <Providers>
-          {!hideHeader && <DashboardHeader />}
+          {hideHeader ? (
+            <div className="flex items-center h-14 px-4 border-b bg-white">
+              <Link href="/" className="flex items-center gap-2">
+                <img src="/logo.png" alt="Company Logo" className="h-8 w-8 object-contain" />
+                <span className="font-semibold text-lg" style={{ color: "#A97E34" }}>
+                  Uptown October HR
+                </span>
+              </Link>
+            </div>
+          ) : (
+            <DashboardHeader />
+          )}
           {children}
         </Providers>
       </body>
