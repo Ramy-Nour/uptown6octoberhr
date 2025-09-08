@@ -42,9 +42,11 @@ export function AdminHeader() {
               key={item.href}
               asChild
               size="sm"
-              variant={active ? 'secondary' : 'ghost'}
+              variant="outline"
               className={cn(
-                active && 'bg-yellow-50 text-yellow-700 ring-1 ring-yellow-500'
+                active
+                  ? 'bg-yellow-500 text-black hover:bg-yellow-500/90 ring-1 ring-yellow-600'
+                  : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
               )}
             >
               <Link href={item.href}>{item.label}</Link>
