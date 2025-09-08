@@ -281,7 +281,7 @@ export default function DashboardPage() {
   });
   
   const pathname = usePathname();
-  const adminNav = useMemo(() => ([
+  const adminNav = [
     { href: '/admin/employees', label: 'Manage Employees' },
     { href: '/admin/employees/create', label: 'Add Employee' },
     { href: '/dashboard/settings/leave-types', label: 'Leave Types' },
@@ -290,7 +290,7 @@ export default function DashboardPage() {
     { href: '/admin/work-schedules', label: 'Schedules' },
     { href: '/dashboard/settings/bulk-update', label: 'Bulk Update' },
     { href: '/dashboard/reports', label: 'Reports' },
-  ]), []);
+  ] as const;
 
   const renderTopActionBar = () => {
     if (!isHr) return null;
