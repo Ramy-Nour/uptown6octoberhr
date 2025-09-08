@@ -2,7 +2,7 @@
 
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -12,6 +12,9 @@ import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { Label } from '@/components/ui/label';
 import Link from 'next/link';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ChevronsUpDown, ArrowUpDown } from 'lucide-react';
 
 type Employee = { id: string; firstName: string; lastName: string; };
 type ReportData = {
@@ -24,6 +27,17 @@ type ReportData = {
   leaveType: { name: string; };
 }
 
+const STATUS_OPTIONS = [
+  { value: 'APPROVED', label: 'Approved' },
+  { value: 'DENIED', label: 'Denied' },
+  { value: 'WAITING_APPROVAL', label: 'Waiting Approval' },
+  { value: 'CANCELLED', label: 'Cancelled' },
+  { value: 'WAITING_CANCELLATION_APPROVAL', label: 'Waiting Cancellation Approval' },
+] as const
+
+type SortBy = 'date' | 'status'
+type SortDir = 'asc' | 'desc'
+
 export default function ReportsPage() {
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
@@ -34,6 +48,12 @@ export default function ReportsPage() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('all');
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [endDate, setEndDate] = useState<Date | undefined>();
+
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [statusPopoverOpen, setStatusPopoverOpen] = useState(false);
+
+  const [sortBy, setSortBy] = useState<SortBy>('date');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -91,13 +111,42 @@ export default function ReportsPage() {
     }
   };
 
+  const filteredAndSorted = useMemo(() => {
+    let arr = [...reportData]
+    if (selectedStatuses.length > 0) {
+      const set = new Set(selectedStatuses)
+      arr = arr.filter(r => set.has(r.status))
+    }
+    arr.sort((a, b) => {
+      if (sortBy === 'date') {
+        const aDate = new Date(a.startDate).getTime()
+        const bDate = new Date(b.startDate).getTime()
+        return sortDir === 'asc' ? aDate - bDate : bDate - aDate
+      }
+      // status sort (alphabetical by label)
+      const aLabel = a.status.replace(/_/g, ' ')
+      const bLabel = b.status.replace(/_/g, ' ')
+      return sortDir === 'asc' ? aLabel.localeCompare(bLabel) : bLabel.localeCompare(aLabel)
+    })
+    return arr
+  }, [reportData, selectedStatuses, sortBy, sortDir])
+
+  const toggleSort = (target: SortBy) => {
+    if (sortBy !== target) {
+      setSortBy(target)
+      setSortDir('asc')
+    } else {
+      setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+    }
+  }
+
   if (sessionStatus === 'loading') {
     return <div className="flex items-center justify-center min-h-screen"><p>Loading...</p></div>;
   }
   
   // --- FIX: Pre-build the table content to prevent hydration errors ---
-  const reportTableContent = reportData.length > 0 ? (
-    reportData.map(req => (
+  const reportTableContent = filteredAndSorted.length > 0 ? (
+    filteredAndSorted.map(req => (
       <TableRow key={req.id}>
         <TableCell>{req.employee.firstName} {req.employee.lastName}</TableCell>
         <TableCell>{req.leaveType.name}</TableCell>
@@ -122,7 +171,7 @@ export default function ReportsPage() {
           <CardDescription>Generate reports for leave requests by employee and date range.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-end">
+          <div className="flex flex-col sm:flex-row flex-wrap gap-4 items-end">
             <div className="grid gap-2">
               <Label>Employee</Label>
               <Select onValueChange={setSelectedEmployeeId} defaultValue="all">
@@ -147,6 +196,50 @@ export default function ReportsPage() {
               <Label>End Date</Label>
               <DatePicker value={endDate} onChange={setEndDate} />
             </div>
+            <div className="grid gap-2">
+              <Label>Status</Label>
+              <Popover open={statusPopoverOpen} onOpenChange={setStatusPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="outline" className="w-[260px] justify-between">
+                    {selectedStatuses.length > 0 ? `${selectedStatuses.length} selected` : 'Filter by status'}
+                    <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[260px]">
+                  <div className="space-y-2">
+                    {STATUS_OPTIONS.map(({ value, label }) => {
+                      const checked = selectedStatuses.includes(value)
+                      return (
+                        <label key={value} className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(v) => {
+                              const isChecked = Boolean(v)
+                              setSelectedStatuses((prev) =>
+                                isChecked ? [...prev, value] : prev.filter(s => s !== value)
+                              )
+                            }}
+                          />
+                          <span>{label}</span>
+                        </label>
+                      )
+                    })}
+                    {selectedStatuses.length > 0 && (
+                      <div className="pt-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="w-full"
+                          onClick={() => setSelectedStatuses([])}
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
             <div>
               <Button onClick={handleGenerateReport} disabled={isLoading}>{isLoading ? 'Generating...' : 'Generate Report'}</Button>
             </div>
@@ -159,7 +252,20 @@ export default function ReportsPage() {
         <CardHeader><CardTitle>Report Results</CardTitle></CardHeader>
         <CardContent>
           <Table>
-            <TableHeader><TableRow><TableHead>Employee</TableHead><TableHead>Type</TableHead><TableHead>Dates</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Employee</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('date')}>
+                  Dates
+                  <ArrowUpDown className="inline-block ml-2 h-4 w-4 align-middle" />
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('status')}>
+                  Status
+                  <ArrowUpDown className="inline-block ml-2 h-4 w-4 align-middle" />
+                </TableHead>
+              </TableRow>
+            </TableHeader>
             <TableBody>
               {reportTableContent}
             </TableBody>
