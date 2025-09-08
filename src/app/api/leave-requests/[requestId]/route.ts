@@ -1,9 +1,9 @@
 // File: src/app/api/leave-requests/[requestId]/route.ts
 
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import db from '@/lib/prisma';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '../../auth/[...nextauth]/route';
+import { db } from '@/lib/db';
 import { LeaveStatus } from '@prisma/client';
 
 export async function PATCH(
@@ -64,25 +64,41 @@ export async function PATCH(
         let workSchedule = leaveRequestToUpdate.employee.workSchedule || await prisma.workSchedule.findFirst({ where: { isDefault: true } });
         if (!workSchedule) throw new Error("No default work schedule found.");
 
-        // Holidays within range: company/national/team + employee-specific for this employee
+        // Holidays within range: overlap with requested range AND relevant type
         const rangedHolidays = await prisma.holiday.findMany({
           where: {
-            date: { gte: start, lte: end },
-            OR: [
-              { type: 'COMPANY' },
-              { type: 'NATIONAL' },
-              { type: 'TEAM' },
-              { AND: [{ type: 'EMPLOYEE' }, { employeeId: leaveRequestToUpdate.employeeId }] },
+            AND: [
+              { startDate: { lte: end } }, // holiday starts before or on end of request
+              { endDate: { gte: start } }, // holiday ends after or on start of request
+              {
+                OR: [
+                  { type: 'COMPANY' },
+                  { type: 'NATIONAL' },
+                  { type: 'TEAM' },
+                  { AND: [{ type: 'EMPLOYEE' }, { employeeId: leaveRequestToUpdate.employeeId }] },
+                ],
+              },
             ],
           },
         });
-        const holidayDates = new Set(rangedHolidays.map(h => h.date.toISOString().split('T')[0]));
+
+        // Expand holiday ranges to individual date strings for quick lookup
+        const holidayDates = new Set<string>();
+        for (const h of rangedHolidays) {
+          const hStart = new Date(h.startDate);
+          const hEnd = new Date(h.endDate);
+          const d = new Date(hStart);
+          while (d <= hEnd) {
+            holidayDates.add(d.toISOString().split('T')[0]);
+            d.setDate(d.getDate() + 1);
+          }
+        }
 
         // Weekly recurring employee-specific holidays (weekday-based offs)
         const weeklyEmployeeHolidays = await prisma.holiday.findMany({
           where: { type: 'EMPLOYEE', employeeId: leaveRequestToUpdate.employeeId, repeatWeekly: true },
         });
-        const weeklyHolidayWeekdays = new Set<number>(weeklyEmployeeHolidays.map(h => new Date(h.date).getDay()));
+        const weeklyHolidayWeekdays = new Set<number>(weeklyEmployeeHolidays.map(h => new Date(h.startDate).getDay()));
         
         let workingDaysRequested = 0;
         let currentDate = new Date(start);
