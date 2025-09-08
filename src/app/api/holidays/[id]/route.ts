@@ -56,13 +56,26 @@ export async function PATCH(
     const holidayId = params.id;
     const body = await request.json();
 
+    // Normalize fields
+    const updateData: any = {
+      ...(body.name && { name: body.name }),
+      ...(body.type && { type: body.type }),
+      ...(body.isLocked !== undefined && { isLocked: body.isLocked }),
+      ...(body.date && { date: new Date(body.date) }),
+    };
+
+    if (body.type === 'EMPLOYEE') {
+      updateData.employeeId = body.employeeId ?? null;
+      updateData.repeatWeekly = Boolean(body.repeatWeekly);
+    } else if (body.type) {
+      // If switching to a non-EMPLOYEE type, clear employee-specific fields
+      updateData.employeeId = null;
+      updateData.repeatWeekly = false;
+    }
+
     const updatedHoliday = await prisma.holiday.update({
       where: { id: holidayId },
-      data: {
-        ...body,
-        // If the date is being updated, ensure it's a Date object
-        ...(body.date && { date: new Date(body.date) }),
-      },
+      data: updateData,
     });
 
     return NextResponse.json(updatedHoliday);

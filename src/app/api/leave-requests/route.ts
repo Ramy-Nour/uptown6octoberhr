@@ -108,11 +108,26 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "No default work schedule found. Please configure one." }, { status: 500 });
     }
 
-    const holidays = await db.holiday.findMany({
-      where: { date: { gte: start, lte: end } },
+    // Holidays within range: company/national/team + employee-specific for this employee
+    const rangedHolidays = await db.holiday.findMany({
+      where: {
+        date: { gte: start, lte: end },
+        OR: [
+          { type: 'COMPANY' },
+          { type: 'NATIONAL' },
+          { type: 'TEAM' },
+          { AND: [{ type: 'EMPLOYEE' }, { employeeId: employeeProfile.id }] },
+        ],
+      },
     });
-    const holidayDates = new Set(holidays.map(h => h.date.toISOString().split('T')[0]));
-    
+    const holidayDates = new Set(rangedHolidays.map(h => h.date.toISOString().split('T')[0]));
+
+    // Weekly recurring employee-specific holidays (weekday-based offs)
+    const weeklyEmployeeHolidays = await db.holiday.findMany({
+      where: { type: 'EMPLOYEE', employeeId: employeeProfile.id, repeatWeekly: true },
+    });
+    const weeklyHolidayWeekdays = new Set<number>(weeklyEmployeeHolidays.map(h => new Date(h.date).getDay()));
+
     let workingDaysRequested = 0;
     let currentDate = new Date(start);
 
@@ -125,7 +140,9 @@ export async function POST(req: Request) {
     while (currentDate <= end) {
       const dayOfWeek = currentDate.getDay();
       const dateString = currentDate.toISOString().split('T')[0];
-      if (!weekendMap[dayOfWeek] && !holidayDates.has(dateString)) {
+      const isWorkingDay = !weekendMap[dayOfWeek];
+      const isHoliday = holidayDates.has(dateString) || weeklyHolidayWeekdays.has(dayOfWeek);
+      if (isWorkingDay && !isHoliday) {
         workingDaysRequested++;
       }
       currentDate.setDate(currentDate.getDate() + 1);

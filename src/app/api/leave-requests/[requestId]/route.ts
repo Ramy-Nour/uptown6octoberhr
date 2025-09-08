@@ -64,8 +64,25 @@ export async function PATCH(
         let workSchedule = leaveRequestToUpdate.employee.workSchedule || await prisma.workSchedule.findFirst({ where: { isDefault: true } });
         if (!workSchedule) throw new Error("No default work schedule found.");
 
-        const holidays = await prisma.holiday.findMany({ where: { date: { gte: start, lte: end } } });
-        const holidayDates = new Set(holidays.map(h => h.date.toISOString().split('T')[0]));
+        // Holidays within range: company/national/team + employee-specific for this employee
+        const rangedHolidays = await prisma.holiday.findMany({
+          where: {
+            date: { gte: start, lte: end },
+            OR: [
+              { type: 'COMPANY' },
+              { type: 'NATIONAL' },
+              { type: 'TEAM' },
+              { AND: [{ type: 'EMPLOYEE' }, { employeeId: leaveRequestToUpdate.employeeId }] },
+            ],
+          },
+        });
+        const holidayDates = new Set(rangedHolidays.map(h => h.date.toISOString().split('T')[0]));
+
+        // Weekly recurring employee-specific holidays (weekday-based offs)
+        const weeklyEmployeeHolidays = await prisma.holiday.findMany({
+          where: { type: 'EMPLOYEE', employeeId: leaveRequestToUpdate.employeeId, repeatWeekly: true },
+        });
+        const weeklyHolidayWeekdays = new Set<number>(weeklyEmployeeHolidays.map(h => new Date(h.date).getDay()));
         
         let workingDaysRequested = 0;
         let currentDate = new Date(start);
@@ -74,7 +91,9 @@ export async function PATCH(
         while (currentDate <= end) {
           const dayOfWeek = currentDate.getDay();
           const dateString = currentDate.toISOString().split('T')[0];
-          if (!weekendMap[dayOfWeek] && !holidayDates.has(dateString)) {
+          const isWorkingDay = !weekendMap[dayOfWeek];
+          const isHoliday = holidayDates.has(dateString) || weeklyHolidayWeekdays.has(dayOfWeek);
+          if (isWorkingDay && !isHoliday) {
             workingDaysRequested++;
           }
           currentDate.setDate(currentDate.getDate() + 1);
