@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 export function EmployeeHeader() {
   const { data: session } = useSession();
 
-  // Employee: only Logout (no navigation buttons)
+  // Employee: show Reports + Logout
   return (
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-white border-b">
       <div className="mb-4 sm:mb-0">
@@ -20,6 +20,9 @@ export function EmployeeHeader() {
         </p>
       </div>
       <div className="flex items-center space-x-2 flex-wrap justify-end gap-2">
+        <Button asChild size="sm" variant="outline" className="bg-yellow-50 text-yellow-700 hover:bg-yellow-100">
+          <Link href="/dashboard/reports">Reports</Link>
+        </Button>
         <Button 
           onClick={() => signOut({ callbackUrl: '/login' })} 
           variant="destructive" 

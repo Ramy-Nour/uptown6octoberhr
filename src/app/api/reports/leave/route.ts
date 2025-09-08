@@ -3,25 +3,93 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]/route";
 import { db } from "@/lib/db";
 
+/**
+ * Role/manager scoping rules:
+ * - SUPER_ADMIN, ADMIN: can view all employees (supports employeeId=all)
+ * - Manager: can view their own records and their direct reports
+ *   * If employeeId is provided and is not the manager or their direct report -> 403
+ *   * If employeeId = all -> automatically scoped to [manager + direct reports]
+ * - Employee: can view only their own records
+ *   * If employeeId is provided and not their own -> 403
+ *   * If employeeId = all -> automatically scoped to current user's employeeId
+ */
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
 
-  if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN')) {
+  if (!session || !session.user?.id) {
     return new NextResponse("Unauthorized", { status: 403 });
   }
 
+  const role = session.user.role;
+
   try {
     const { searchParams } = new URL(req.url);
-    const employeeId = searchParams.get('employeeId');
+    const employeeIdParam = searchParams.get('employeeId');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    let whereClause: any = {};
+    // Resolve current user's employee profile
+    const me = await db.employeeProfile.findUnique({
+      where: { userId: session.user.id },
+      select: { id: true },
+    });
 
-    if (employeeId && employeeId !== 'all') {
-      whereClause.employeeId = employeeId;
+    if (!me) {
+      return new NextResponse("User profile not found", { status: 400 });
     }
 
+    // Determine accessible employee IDs for this user
+    let accessibleEmployeeIds: string[] | null = null;
+
+    if (role === 'SUPER_ADMIN' || role === 'ADMIN') {
+      // HR can access all; leave accessibleEmployeeIds as null meaning unscoped
+      accessibleEmployeeIds = null;
+    } else {
+      // Non-HR: determine manager status and scoping
+      // Check if current user manages others
+      const directReports = await db.employeeProfile.findMany({
+        where: { managerId: me.id },
+        select: { id: true },
+      });
+      const directReportIds = directReports.map(r => r.id);
+
+      if (directReportIds.length > 0) {
+        // Manager: can see self + direct reports
+        accessibleEmployeeIds = [me.id, ...directReportIds];
+      } else {
+        // Regular employee: only self
+        accessibleEmployeeIds = [me.id];
+      }
+    }
+
+    // Build where clause with scoping
+    const whereClause: any = {};
+
+    // Apply employee scope
+    if (role === 'SUPER_ADMIN' || role === 'ADMIN') {
+      // HR
+      if (employeeIdParam && employeeIdParam !== 'all') {
+        whereClause.employeeId = employeeIdParam;
+      }
+      // else unscoped (all)
+    } else {
+      // Non-HR
+      if (!accessibleEmployeeIds || accessibleEmployeeIds.length === 0) {
+        return new NextResponse("No accessible employees", { status: 403 });
+      }
+
+      if (!employeeIdParam || employeeIdParam === 'all') {
+        whereClause.employeeId = { in: accessibleEmployeeIds };
+      } else {
+        // Specific employee requested; must be within accessible list
+        if (!accessibleEmployeeIds.includes(employeeIdParam)) {
+          return new NextResponse("Forbidden", { status: 403 });
+        }
+        whereClause.employeeId = employeeIdParam;
+      }
+    }
+
+    // Apply date filter
     if (startDate && endDate) {
       const endOfDay = new Date(endDate);
       endOfDay.setDate(endOfDay.getDate() + 1);
@@ -35,10 +103,9 @@ export async function GET(req: Request) {
       where: whereClause,
       include: {
         employee: {
-          include: {
-            user: {
-              select: { email: true }
-            }
+          select: {
+            firstName: true,
+            lastName: true,
           }
         },
         leaveType: true,

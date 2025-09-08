@@ -77,6 +77,7 @@ const getDisplayStatus = (status: string): { text: string; variant: BadgeProps["
 export default function DashboardPage() {
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
+  const pathname = usePathname(); // Hoisted early to avoid any hook order surprises
 
   const [isManager, setIsManager] = useState(false);
   const [balances, setBalances] = useState<Balance[]>([]);
@@ -240,9 +241,8 @@ export default function DashboardPage() {
     }
   };
 
-  if (sessionStatus === 'loading' || isLoading) {
-    return <div className="flex items-center justify-center min-h-screen"><p>Loading...</p></div>;
-  }
+  // Move loading UI to render section to keep hook order stable
+  const showLoading = sessionStatus === 'loading' || isLoading;
   
   const balancesTableContent = balances.map(b => (<TableRow key={b.id}><TableCell>{b.leaveType.name}</TableCell><TableCell>{b.leaveType.cadence === 'ANNUAL' ? b.year : `${getMonthName(b.month)} ${b.year}`}</TableCell><TableCell className="text-right font-medium">{b.remaining} {b.leaveType.unit.toLowerCase()}</TableCell><TableCell className="text-right">{b.total} {b.leaveType.unit.toLowerCase()}</TableCell></TableRow>));
   
@@ -280,7 +280,6 @@ export default function DashboardPage() {
       );
   });
   
-  const pathname = usePathname();
   const adminNav = [
     { href: '/admin/employees', label: 'Manage Employees' },
     { href: '/admin/employees/create', label: 'Add Employee' },
@@ -292,28 +291,32 @@ export default function DashboardPage() {
     { href: '/dashboard/reports', label: 'Reports' },
   ] as const;
 
-  
-
   return (
     <>
       <main className="p-4 sm:p-8 max-w-7xl mx-auto space-y-8">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold">Dashboard</h1>
-            <p className="text-muted-foreground">Welcome back, {session?.user?.email}</p>
-          </div>
-        </div>
-        {error && <Card className="bg-destructive/10 border-destructive"><CardHeader><CardTitle className="text-destructive">An Error Occurred</CardTitle><CardDescription className="text-destructive">{error}</CardDescription></CardHeader></Card>}
-        {isHr && (pendingHrRequests.length > 0 || pendingHrCancellations.length > 0) && (<Card className="border-red-500 bg-red-500/5"><CardHeader><CardTitle>Final HR Approvals</CardTitle><CardDescription>Manager-approved requests and cancellations waiting for final sign-off.</CardDescription></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Employee</TableHead><TableHead>Type</TableHead><TableHead>Dates</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{hrPendingContent}</TableBody></Table></CardContent></Card>)}
-        {isManager && (<>
-            <Card className="border-primary bg-primary/5"><CardHeader><CardTitle>Pending Leave Approvals</CardTitle><CardDescription>Requests waiting for your approval.</CardDescription></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Employee</TableHead><TableHead>Type</TableHead><TableHead>Dates</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{pendingManagerRequests.length > 0 ? managerPendingContent : <TableRow><TableCell colSpan={4} className="text-center">No requests waiting for your approval.</TableCell></TableRow>}</TableBody></Table></CardContent></Card>
-            {(pendingManagerCancellations.length > 0) && <Card className="border-yellow-500 bg-yellow-500/5"><CardHeader><CardTitle>Pending Cancellation Approvals</CardTitle><CardDescription>Employees requesting to cancel approved leave.</CardDescription></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Employee</TableHead><TableHead>Type</TableHead><TableHead>Dates to Cancel</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{managerCancellationContent}</TableBody></Table></CardContent></Card>}
-        </>)}
-        <Card><CardHeader className="flex flex-row items-center justify-between"><div><CardTitle>My Leave Balances</CardTitle><CardDescription>Your available leave for the current period.</CardDescription></div><Link href="/dashboard/leave/request"><Button>Request Time Off</Button></Link></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Leave Type</TableHead><TableHead>Period</TableHead><TableHead className="text-right">Remaining</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader><TableBody>{balances.length > 0 ? balancesTableContent : <TableRow><TableCell colSpan={4} className="text-center">No balances to display.</TableCell></TableRow>}</TableBody></Table></CardContent></Card>
-        <Card><CardHeader><CardTitle>My Request History</CardTitle><CardDescription>A history of all your submitted leave requests.</CardDescription></CardHeader><CardContent>
-            <div className="flex items-center space-x-4 mb-4"><Popover><PopoverTrigger asChild><Button variant="outline" className={cn("w-[240px] justify-start text-left font-normal",!startDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{startDate ? format(startDate, "PPP") : <span>Pick start date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={startDate} onSelect={setStartDate} /></PopoverContent></Popover><Popover><PopoverTrigger asChild><Button variant="outline" className={cn("w-[240px] justify-start text-left font-normal",!endDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{endDate ? format(endDate, "PPP") : <span>Pick end date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={endDate} onSelect={setEndDate} /></PopoverContent></Popover><Button onClick={handleFilter}>Filter</Button></div>
-            <Table><TableHeader><TableRow><TableHead>Type</TableHead><TableHead>Dates</TableHead><TableHead>Status</TableHead><TableHead>Denial Reason</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{historyTableContent}</TableBody></Table>
-        </CardContent></Card>
+        {showLoading ? (
+          <div className="flex items-center justify-center min-h-[40vh]"><p>Loading...</p></div>
+        ) : (
+          <>
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-3xl font-bold">Dashboard</h1>
+                <p className="text-muted-foreground">Welcome back, {session?.user?.email}</p>
+              </div>
+            </div>
+            {error && <Card className="bg-destructive/10 border-destructive"><CardHeader><CardTitle className="text-destructive">An Error Occurred</CardTitle><CardDescription className="text-destructive">{error}</CardDescription></CardHeader></Card>}
+            {isHr && (pendingHrRequests.length > 0 || pendingHrCancellations.length > 0) && (<Card className="border-red-500 bg-red-500/5"><CardHeader><CardTitle>Final HR Approvals</CardTitle><CardDescription>Manager-approved requests and cancellations waiting for final sign-off.</CardDescription></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Employee</TableHead><TableHead>Type</TableHead><TableHead>Dates</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{hrPendingContent}</TableBody></Table></CardContent></Card>)}
+            {isManager && (<>
+                <Card className="border-primary bg-primary/5"><CardHeader><CardTitle>Pending Leave Approvals</CardTitle><CardDescription>Requests waiting for your approval.</CardDescription></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Employee</TableHead><TableHead>Type</TableHead><TableHead>Dates</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{pendingManagerRequests.length > 0 ? managerPendingContent : <TableRow><TableCell colSpan={4} className="text-center">No requests waiting for your approval.</TableCell></TableRow>}</TableBody></Table></CardContent></Card>
+                {(pendingManagerCancellations.length > 0) && <Card className="border-yellow-500 bg-yellow-500/5"><CardHeader><CardTitle>Pending Cancellation Approvals</CardTitle><CardDescription>Employees requesting to cancel approved leave.</CardDescription></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Employee</TableHead><TableHead>Type</TableHead><TableHead>Dates to Cancel</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{managerCancellationContent}</TableBody></Table></CardContent></Card>}
+            </>)}
+            <Card><CardHeader className="flex flex-row items-center justify-between"><div><CardTitle>My Leave Balances</CardTitle><CardDescription>Your available leave for the current period.</CardDescription></div><Link href="/dashboard/leave/request"><Button>Request Time Off</Button></Link></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Leave Type</TableHead><TableHead>Period</TableHead><TableHead className="text-right">Remaining</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader><TableBody>{balances.length > 0 ? balancesTableContent : <TableRow><TableCell colSpan={4} className="text-center">No balances to display.</TableCell></TableRow>}</TableBody></Table></CardContent></Card>
+            <Card><CardHeader><CardTitle>My Request History</CardTitle><CardDescription>A history of all your submitted leave requests.</CardDescription></CardHeader><CardContent>
+                <div className="flex items-center space-x-4 mb-4"><Popover><PopoverTrigger asChild><Button variant="outline" className={cn("w-[240px] justify-start text-left font-normal",!startDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{startDate ? format(startDate, "PPP") : <span>Pick start date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={startDate} onSelect={setStartDate} /></PopoverContent></Popover><Popover><PopoverTrigger asChild><Button variant="outline" className={cn("w-[240px] justify-start text-left font-normal",!endDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{endDate ? format(endDate, "PPP") : <span>Pick end date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={endDate} onSelect={setEndDate} /></PopoverContent></Popover><Button onClick={handleFilter}>Filter</Button></div>
+                <Table><TableHeader><TableRow><TableHead>Type</TableHead><TableHead>Dates</TableHead><TableHead>Status</TableHead><TableHead>Denial Reason</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{historyTableContent}</TableBody></Table>
+            </CardContent></Card>
+          </>
+        )}
       </main>
       <Dialog open={isDenyDialogOpen} onOpenChange={(open) => { setIsDenyDialogOpen(open); if (!open) { setDenialReason(''); setOtherReason(''); setIsCancellationRejection(false); } }}>
         <DialogContent>
