@@ -96,8 +96,18 @@ export default function RequestLeavePage() {
       })
 
       if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(errorText || 'Submit failed')
+        let message = 'Submit failed'
+        try {
+          const data = await response.json()
+          message = data?.message || message
+          if (process.env.NODE_ENV !== 'production' && data?.error) {
+            message += `: ${data.error}`
+          }
+        } catch {
+          const text = await response.text()
+          if (text) message = text
+        }
+        throw new Error(message)
       }
 
       alert('Leave request submitted successfully!')
