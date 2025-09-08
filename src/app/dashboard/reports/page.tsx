@@ -39,11 +39,17 @@ export default function ReportsPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (sessionStatus === 'authenticated' && (session?.user.role === 'ADMIN' || session?.user.role === 'SUPER_ADMIN')) {
+    if (sessionStatus === 'authenticated') {
       const fetchEmployees = async () => {
         setIsLoading(true);
         try {
-          const res = await fetch('/api/employees');
+          let res: Response;
+          if (session?.user.role === 'ADMIN' || session?.user.role === 'SUPER_ADMIN') {
+            res = await fetch('/api/employees');
+          } else {
+            // managers and employees: fetch only accessible employees
+            res = await fetch('/api/manager/accessible-employees');
+          }
           if (!res.ok) throw new Error('Failed to fetch employees');
           setEmployees(await res.json());
         } catch (err: any) {
@@ -73,7 +79,8 @@ export default function ReportsPage() {
       
       const response = await fetch(url);
       if (!response.ok) {
-        throw new Error('Failed to generate report.');
+        const message = await response.text();
+        throw new Error(message || 'Failed to generate report.');
       }
       const data = await response.json();
       setReportData(data);
@@ -123,7 +130,11 @@ export default function ReportsPage() {
                   <SelectValue placeholder="Select an employee" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Employees</SelectItem>
+                  <SelectItem value="all">
+                    {(session?.user.role === 'ADMIN' || session?.user.role === 'SUPER_ADMIN')
+                      ? 'All Employees'
+                      : 'All Accessible Employees'}
+                  </SelectItem>
                   {employees.map(emp => <SelectItem key={emp.id} value={emp.id}>{emp.firstName} {emp.lastName}</SelectItem>)}
                 </SelectContent>
               </Select>
