@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ChevronsUpDown, ArrowUpDown } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 type Employee = { id: string; firstName: string; lastName: string; };
 type ReportData = {
@@ -181,6 +182,22 @@ export default function ReportsPage() {
     URL.revokeObjectURL(url);
   }
 
+  const handleExportXLSX = () => {
+    if (filteredAndSorted.length === 0) return;
+    const data = filteredAndSorted.map(req => ({
+      Employee: `${req.employee.firstName} ${req.employee.lastName}`,
+      Type: req.leaveType.name,
+      "Start Date": format(new Date(req.startDate), 'yyyy-MM-dd'),
+      "End Date": format(new Date(req.endDate), 'yyyy-MM-dd'),
+      Status: req.status.replace(/_/g, ' ')
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Leave Report');
+    const filename = `leave-report-${new Date().toISOString().slice(0,10)}.xlsx`;
+    XLSX.writeFile(wb, filename);
+  }
+
   if (sessionStatus === 'loading') {
     return <div className="flex items-center justify-center min-h-screen"><p>Loading...</p></div>;
   }
@@ -284,6 +301,7 @@ export default function ReportsPage() {
             <div className="flex items-center gap-2">
               <Button onClick={handleGenerateReport} disabled={isLoading}>{isLoading ? 'Generating...' : 'Generate Report'}</Button>
               <Button variant="outline" onClick={handleExportCSV} disabled={filteredAndSorted.length === 0}>Export CSV</Button>
+              <Button variant="outline" onClick={handleExportXLSX} disabled={filteredAndSorted.length === 0}>Export Excel</Button>
             </div>
           </div>
           {error && <p className="text-sm text-destructive mt-2">{error}</p>}
