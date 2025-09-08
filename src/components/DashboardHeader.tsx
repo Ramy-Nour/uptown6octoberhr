@@ -9,7 +9,8 @@ import { ManagerHeader } from './headers/ManagerHeader';
 import { EmployeeHeader } from './headers/EmployeeHeader';
 
 export function DashboardHeader() {
-  const {  session, status } = useSession();
+  // Correctly read session from useSession
+  const { data: session, status } = useSession();
   const [isManager, setIsManager] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
