@@ -18,7 +18,9 @@ import { Calendar } from "@/components/ui/calendar";
 import { CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { Badge, BadgeProps } from '@/components/ui/badge';
+import { Badge, badgeVariants } from '@/components/ui/badge';
+import type { VariantProps } from 'class-variance-authority';
+type BadgeProps = VariantProps<typeof badgeVariants>;
 import { LeaveStatus } from '@prisma/client';
 
 type Request = {
