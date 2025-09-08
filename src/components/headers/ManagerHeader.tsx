@@ -19,8 +19,11 @@ export function ManagerHeader() {
   return (
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-white border-b shadow-sm">
       <div className="mb-4 sm:mb-0">
-        <h1 className="text-xl font-bold text-gray-800">
-          <Link href="/dashboard">Dashboard</Link>
+        <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+          <Link href="/dashboard" className="flex items-center gap-2">
+            <img src="/logo.png" alt="Company Logo" className="h-8 w-8 object-contain" />
+            <span>Dashboard</span>
+          </Link>
         </h1>
         <p className="text-sm text-muted-foreground mt-1 hidden sm:block">
           Welcome, {session?.user?.email} (Manager)
@@ -37,8 +40,7 @@ export function ManagerHeader() {
               key={item.href}
               asChild
               size="sm"
-              variant={active ? 'secondary' : 'ghost'}
-              className={cn(active && 'bg-yellow-50 text-yellow-700 ring-1 ring-yellow-500')}
+              className={cn(active ? 'btn-primary' : 'btn-primary-outline')}
             >
               <Link href={item.href}>{item.label}</Link>
             </Button>
@@ -46,9 +48,8 @@ export function ManagerHeader() {
         })}
         <Button 
           onClick={() => signOut({ callbackUrl: '/login' })} 
-          variant="destructive" 
           size="sm"
-          className="w-full sm:w-auto"
+          className="w-full sm:w-auto btn-primary"
         >
           Log Out
         </Button>

@@ -28,7 +28,7 @@ export async function GET() {
   try {
     const holidays = await prisma.holiday.findMany({
       orderBy: {
-        date: 'asc', // Order holidays by date
+        startDate: 'asc', // Order holidays by start date
       },
     });
     return NextResponse.json(holidays);
@@ -57,7 +57,10 @@ export async function GET() {
  * properties:
  * name:
  * type: string
- * date:
+ * startDate:
+ * type: string
+ * format: date-time
+ * endDate:
  * type: string
  * format: date-time
  * type:
@@ -82,12 +85,29 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, date, type, createdBy, isLocked, employeeId, repeatWeekly } = body;
+    const { name, startDate, endDate, type, createdBy, isLocked, employeeId, repeatWeekly } = body;
 
     // Basic validation to ensure required fields are present
-    if (!name || !date || !type || !createdBy) {
+    if (!name || !startDate || !endDate || !type || !createdBy) {
       return NextResponse.json(
         { error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return NextResponse.json(
+        { error: 'Invalid date format' },
+        { status: 400 }
+      );
+    }
+
+    if (end < start) {
+      return NextResponse.json(
+        { error: 'End date must be on or after start date' },
         { status: 400 }
       );
     }
@@ -103,7 +123,8 @@ export async function POST(request: Request) {
     const newHoliday = await prisma.holiday.create({
       data: {
         name,
-        date: new Date(date), // Ensure date is a proper Date object
+        startDate: start,
+        endDate: end,
         type,
         createdBy,
         isLocked: isLocked ?? false,

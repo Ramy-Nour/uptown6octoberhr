@@ -139,10 +139,10 @@ export default function ManageAdminsPage() {
 
       <div className="mb-8 p-6 bg-white rounded-lg shadow-md">
         <div className="flex border-b mb-4">
-          <button onClick={() => setView('promote')} className={`py-2 px-4 ${view === 'promote' ? 'border-b-2 border-blue-600 font-semibold' : 'text-gray-500'}`}>
+          <button onClick={() => setView('promote')} className={`py-2 px-4 ${view === 'promote' ? 'border-b-2 border-brand-600 font-semibold' : 'text-gray-500'}`}>
             Promote Employee
           </button>
-          <button onClick={() => setView('create')} className={`py-2 px-4 ${view === 'create' ? 'border-b-2 border-blue-600 font-semibold' : 'text-gray-500'}`}>
+          <button onClick={() => setView('create')} className={`py-2 px-4 ${view === 'create' ? 'border-b-2 border-brand-600 font-semibold' : 'text-gray-500'}`}>
             Create New Admin
           </button>
         </div>
@@ -160,7 +160,9 @@ export default function ManageAdminsPage() {
                   {employees.map(emp => (<option key={emp.id} value={emp.id}>{emp.profile?.firstName} {emp.profile?.lastName} ({emp.email})</option>))}
                 </select>
               </div>
-              <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 h-10">Promote to Admin</button>
+              <button type="submit" className="btn-primary h-10">
+                Promote to Admin
+              </button>
             </div>
           </form>
         )}
@@ -180,7 +182,9 @@ export default function ManageAdminsPage() {
               </div>
             </div>
             <div className="flex justify-end mt-4">
-              <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Add Admin</button>
+              <button type="submit" className="btn-primary">
+                Add Admin
+              </button>
             </div>
           </form>
         )}

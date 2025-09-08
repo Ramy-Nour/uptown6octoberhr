@@ -27,8 +27,11 @@ export function AdminHeader() {
   return (
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-white border-b">
       <div className="mb-4 sm:mb-0">
-        <h1 className="text-xl font-bold text-gray-800">
-          <Link href="/dashboard">Uptown October HR</Link>
+        <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+          <Link href="/dashboard" className="flex items-center gap-2">
+            <img src="/logo.png" alt="Company Logo" className="h-8 w-8 object-contain" />
+            <span>Uptown October HR</span>
+          </Link>
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
           Welcome, {session?.user?.email} (Admin)
@@ -42,12 +45,7 @@ export function AdminHeader() {
               key={item.href}
               asChild
               size="sm"
-              variant="outline"
-              className={cn(
-                active
-                  ? 'bg-yellow-500 text-black hover:bg-yellow-500/90 ring-1 ring-yellow-600'
-                  : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
-              )}
+              className={cn(active ? 'btn-primary' : 'btn-primary-outline')}
             >
               <Link href={item.href}>{item.label}</Link>
             </Button>
@@ -55,8 +53,8 @@ export function AdminHeader() {
         })}
         <Button
           onClick={() => signOut({ callbackUrl: '/login' })}
-          variant="destructive"
           size="sm"
+          className="btn-primary"
         >
           Log Out
         </Button>
