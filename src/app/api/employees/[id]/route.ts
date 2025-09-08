@@ -47,6 +47,23 @@ export async function GET(
   }
 }
 
+async function wouldCreateCycle(employeeId: string, proposedManagerId: string): Promise<boolean> {
+  // Walk up the chain from proposedManagerId; if we encounter employeeId, it would create a cycle
+  let currentId: string | null = proposedManagerId;
+  const visited = new Set<string>();
+  while (currentId) {
+    if (visited.has(currentId)) break; // safety
+    visited.add(currentId);
+    if (currentId === employeeId) return true;
+    const mgr = await db.employeeProfile.findUnique({
+      where: { id: currentId },
+      select: { managerId: true }
+    });
+    currentId = mgr?.managerId ?? null;
+  }
+  return false;
+}
+
 export async function PATCH(
   req: Request,
   { params }: { params: { id: string } }
@@ -70,6 +87,20 @@ export async function PATCH(
       return new NextResponse("Employee profile not found", { status: 404 });
     }
 
+    // Validate manager assignment: cannot set self as manager and cannot create cycles
+    if (managerId) {
+      if (managerId === params.id) {
+        return new NextResponse("An employee cannot be their own manager.", { status: 400 });
+      }
+      const mgrExists = await db.employeeProfile.findUnique({ where: { id: managerId }, select: { id: true }});
+      if (!mgrExists) {
+        return new NextResponse("Selected manager does not exist.", { status: 400 });
+      }
+      if (await wouldCreateCycle(params.id, managerId)) {
+        return new NextResponse("Invalid manager selection: would create a circular reporting line.", { status: 400 });
+      }
+    }
+
     // --- Start of Transaction ---
     await db.$transaction(async (tx) => {
       // Update 1: Update the EmployeeProfile table
@@ -80,7 +111,7 @@ export async function PATCH(
               lastName,
               position,
               startDate: startDate ? new Date(startDate) : null,
-              managerId,
+              managerId: managerId ?? null,
           }
       });
 

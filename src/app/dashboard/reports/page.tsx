@@ -27,12 +27,15 @@ type ReportData = {
   leaveType: { name: string; };
 }
 
+// Use exact enum values to match backend
 const STATUS_OPTIONS = [
-  { value: 'APPROVED', label: 'Approved' },
+  { value: 'APPROVED_BY_ADMIN', label: 'Approved' },
   { value: 'DENIED', label: 'Denied' },
-  { value: 'WAITING_APPROVAL', label: 'Waiting Approval' },
+  { value: 'PENDING_MANAGER', label: 'Pending Manager Approval' },
+  { value: 'PENDING_ADMIN', label: 'Pending Final Approval' },
   { value: 'CANCELLED', label: 'Cancelled' },
-  { value: 'WAITING_CANCELLATION_APPROVAL', label: 'Waiting Cancellation Approval' },
+  { value: 'CANCELLATION_PENDING_MANAGER', label: 'Pending Manager Cancellation Approval' },
+  { value: 'CANCELLATION_PENDING_ADMIN', label: 'Pending Final Cancellation Approval' },
 ] as const
 
 type SortBy = 'date' | 'status'
@@ -94,8 +97,17 @@ export default function ReportsPage() {
       }
       const formattedStartDate = startDate.toISOString().split('T')[0];
       const formattedEndDate = endDate.toISOString().split('T')[0];
+
+      const params = new URLSearchParams({
+        employeeId: selectedEmployeeId,
+        startDate: formattedStartDate,
+        endDate: formattedEndDate,
+      });
+      if (selectedStatuses.length > 0) {
+        params.set('statuses', selectedStatuses.join(','));
+      }
       
-      const url = `/api/reports/leave?employeeId=${selectedEmployeeId}&startDate=${formattedStartDate}&endDate=${formattedEndDate}`;
+      const url = `/api/reports/leave?${params.toString()}`;
       
       const response = await fetch(url);
       if (!response.ok) {
@@ -138,6 +150,35 @@ export default function ReportsPage() {
     } else {
       setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'))
     }
+  }
+
+  const handleExportCSV = () => {
+    if (filteredAndSorted.length === 0) return;
+    const header = ['Employee','Type','Start Date','End Date','Status'];
+    const rows = filteredAndSorted.map(req => [
+      `${req.employee.firstName} ${req.employee.lastName}`,
+      req.leaveType.name,
+      format(new Date(req.startDate), 'yyyy-MM-dd'),
+      format(new Date(req.endDate), 'yyyy-MM-dd'),
+      req.status.replace(/_/g, ' ')
+    ]);
+    const csv = [header, ...rows].map(r => r.map(field => {
+      const s = String(field ?? '');
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    }).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const filename = `leave-report-${new Date().toISOString().slice(0,10)}.csv`;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 
   if (sessionStatus === 'loading') {
@@ -240,8 +281,9 @@ export default function ReportsPage() {
                 </PopoverContent>
               </Popover>
             </div>
-            <div>
+            <div className="flex items-center gap-2">
               <Button onClick={handleGenerateReport} disabled={isLoading}>{isLoading ? 'Generating...' : 'Generate Report'}</Button>
+              <Button variant="outline" onClick={handleExportCSV} disabled={filteredAndSorted.length === 0}>Export CSV</Button>
             </div>
           </div>
           {error && <p className="text-sm text-destructive mt-2">{error}</p>}
