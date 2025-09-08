@@ -130,7 +130,11 @@ export default function ReportsPage() {
                   <SelectValue placeholder="Select an employee" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Employees</SelectItem>
+                  <SelectItem value="all">
+                    {(session?.user.role === 'ADMIN' || session?.user.role === 'SUPER_ADMIN')
+                      ? 'All Employees'
+                      : 'All Accessible Employees'}
+                  </SelectItem>
                   {employees.map(emp => <SelectItem key={emp.id} value={emp.id}>{emp.firstName} {emp.lastName}</SelectItem>)}
                 </SelectContent>
               </Select>
