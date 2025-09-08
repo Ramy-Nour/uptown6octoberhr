@@ -113,7 +113,9 @@ model LeaveRequestAudit {
 model Holiday {
   id            String           @id @default(cuid())
   name          String
-  date          DateTime
+  // Changed from single 'date' to a date range
+  startDate     DateTime
+  endDate       DateTime
   type          HolidayType      @default(COMPANY)
   teamId        String?
   employeeId    String?
@@ -121,7 +123,7 @@ model Holiday {
   createdBy     String
   createdByUser User             @relation("CreatedByUser", fields: [createdBy], references: [id])
   isLocked      Boolean          @default(false)
-  // When true (and type === EMPLOYEE), this holiday recurs every week on the same weekday as `date`
+  // When true (and type === EMPLOYEE), this holiday recurs every week on the same weekday as `startDate`
   repeatWeekly  Boolean          @default(false)
   createdAt     DateTime         @default(now())
 }

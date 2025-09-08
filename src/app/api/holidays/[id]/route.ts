@@ -28,7 +28,10 @@ const prisma = new PrismaClient();
  * properties:
  * name:
  * type: string
- * date:
+ * startDate:
+ * type: string
+ * format: date-time
+ * endDate:
  * type: string
  * format: date-time
  * type:
@@ -61,8 +64,20 @@ export async function PATCH(
       ...(body.name && { name: body.name }),
       ...(body.type && { type: body.type }),
       ...(body.isLocked !== undefined && { isLocked: body.isLocked }),
-      ...(body.date && { date: new Date(body.date) }),
+      ...(body.startDate && { startDate: new Date(body.startDate) }),
+      ...(body.endDate && { endDate: new Date(body.endDate) }),
     };
+
+    if (body.startDate && body.endDate) {
+      const start = new Date(body.startDate);
+      const end = new Date(body.endDate);
+      if (end < start) {
+        return NextResponse.json(
+          { error: 'End date must be on or after start date' },
+          { status: 400 }
+        );
+      }
+    }
 
     if (body.type === 'EMPLOYEE') {
       updateData.employeeId = body.employeeId ?? null;

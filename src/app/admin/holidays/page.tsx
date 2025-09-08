@@ -9,7 +9,8 @@ import { useSession } from 'next-auth/react';
 interface Holiday {
   id: string;
   name: string;
-  date: string;
+  startDate: string;
+  endDate: string;
   type: string;
   employeeId?: string | null;
   repeatWeekly?: boolean;
@@ -34,7 +35,8 @@ export default function HolidayManagementPage() {
   // State for the form
   const [editingHolidayId, setEditingHolidayId] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [date, setDate] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [type, setType] = useState('COMPANY');
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [repeatWeekly, setRepeatWeekly] = useState(false);
@@ -42,7 +44,8 @@ export default function HolidayManagementPage() {
   const resetForm = () => {
     setEditingHolidayId(null);
     setName('');
-    setDate('');
+    setStartDate('');
+    setEndDate('');
     setType('COMPANY');
     setSelectedEmployeeId('');
     setRepeatWeekly(false);
@@ -92,9 +95,20 @@ export default function HolidayManagementPage() {
         return;
     }
 
+    if (!startDate || !endDate) {
+      setError('Please select both start and end dates.');
+      return;
+    }
+
+    if (new Date(endDate) < new Date(startDate)) {
+      setError('End date must be on or after start date.');
+      return;
+    }
+
     const body = {
         name,
-        date,
+        startDate,
+        endDate,
         type,
         createdBy, // For POST requests
         employeeId: type === 'EMPLOYEE' ? selectedEmployeeId : null,
@@ -152,7 +166,8 @@ export default function HolidayManagementPage() {
   const handleEditClick = (holiday: Holiday) => {
     setEditingHolidayId(holiday.id);
     setName(holiday.name);
-    setDate(new Date(holiday.date).toISOString().split('T')[0]);
+    setStartDate(new Date(holiday.startDate).toISOString().split('T')[0]);
+    setEndDate(new Date(holiday.endDate).toISOString().split('T')[0]);
     setType(holiday.type);
     setSelectedEmployeeId(holiday.employeeId || '');
     setRepeatWeekly(Boolean(holiday.repeatWeekly));
@@ -170,14 +185,18 @@ export default function HolidayManagementPage() {
         </h2>
         <form onSubmit={handleFormSubmit}>
             {error && <p className="text-red-500 mb-4">{error}</p>}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="md:col-span-2">
                     <label htmlFor="name" className="block text-sm font-medium text-gray-700">Holiday Name</label>
                     <input type="text" id="name" value={name} onChange={(e) => setName(e.target.value)} required className="mt-1 w-full border border-gray-300 rounded-md p-2"/>
                 </div>
                 <div>
-                    <label htmlFor="date" className="block text-sm font-medium text-gray-700">Date</label>
-                    <input type="date" id="date" value={date} onChange={(e) => setDate(e.target.value)} required className="mt-1 w-full border border-gray-300 rounded-md p-2"/>
+                    <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">Start date</label>
+                    <input type="date" id="startDate" value={startDate} onChange={(e) => setStartDate(e.target.value)} required className="mt-1 w-full border border-gray-300 rounded-md p-2"/>
+                </div>
+                <div>
+                    <label htmlFor="endDate" className="block text-sm font-medium text-gray-700">End date</label>
+                    <input type="date" id="endDate" value={endDate} onChange={(e) => setEndDate(e.target.value)} required className="mt-1 w-full border border-gray-300 rounded-md p-2"/>
                 </div>
                 <div>
                     <label htmlFor="type" className="block text-sm font-medium text-gray-700">Type</label>
@@ -210,7 +229,7 @@ export default function HolidayManagementPage() {
                         className="h-4 w-4 text-blue-600 border-gray-300 rounded"
                       />
                       <label htmlFor="repeatWeekly" className="ml-2 block text-sm text-gray-700">
-                        Repeat weekly (every {date ? new Date(date).toLocaleDateString(undefined, { weekday: 'long' }) : 'week'})
+                        Repeat weekly (every {startDate ? new Date(startDate).toLocaleDateString(undefined, { weekday: 'long' }) : 'week'})
                       </label>
                     </div>
                 </div>
@@ -233,7 +252,7 @@ export default function HolidayManagementPage() {
             <thead className="bg-gray-50">
                 <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dates</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
@@ -242,7 +261,9 @@ export default function HolidayManagementPage() {
                 {holidays.map((holiday) => (
                 <tr key={holiday.id}>
                     <td className="px-6 py-4 whitespace-nowrap">{holiday.name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">{new Date(holiday.date).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {new Date(holiday.startDate).toLocaleDateString()} — {new Date(holiday.endDate).toLocaleDateString()}
+                    </td>
                     <td className="px-6 py-4 whitespace-now-rap">{holiday.type}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <button onClick={() => handleEditClick(holiday)} className="text-indigo-600 hover:text-indigo-900">Edit</button>
