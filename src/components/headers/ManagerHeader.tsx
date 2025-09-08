@@ -11,10 +11,9 @@ export function ManagerHeader() {
   const { data: session } = useSession();
   const pathname = usePathname();
 
+  // Manager: only Reports + Logout
   const nav = [
-    { href: '/dashboard/manager', label: 'Manager Dashboard' },
     { href: '/dashboard/reports', label: 'Reports' },
-    { href: '/dashboard/settings', label: 'Settings' },
   ];
 
   return (
@@ -32,14 +31,14 @@ export function ManagerHeader() {
       </div>
       <div className="flex items-center space-x-2 flex-wrap justify-end gap-2">
         {nav.map((item) => {
-          const active = pathname?.startsWith(item.href);
+          const active = pathname === item.href || pathname?.startsWith(item.href);
           return (
             <Button
               key={item.href}
               asChild
               size="sm"
               variant={active ? 'secondary' : 'ghost'}
-              className={cn(active && 'ring-1 ring-yellow-500')}
+              className={cn(active && 'bg-yellow-50 text-yellow-700 ring-1 ring-yellow-500')}
             >
               <Link href={item.href}>{item.label}</Link>
             </Button>

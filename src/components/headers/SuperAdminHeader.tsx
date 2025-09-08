@@ -11,10 +11,16 @@ export function SuperAdminHeader() {
   const { data: session } = useSession();
   const pathname = usePathname();
 
+  // Super Admin: all admin buttons + Manage Admins
   const nav = [
-    { href: '/admin/employees', label: 'Employees' },
+    { href: '/admin/employees', label: 'Manage Employees' },
+    { href: '/admin/employees/create', label: 'Add Employee' },
+    { href: '/dashboard/reports', label: 'Reports' },
+    { href: '/dashboard/settings/leave-types', label: 'Leave Types' },
+    { href: '/dashboard/settings/leave-balances', label: 'Leave Balances' },
     { href: '/admin/holidays', label: 'Holidays' },
     { href: '/admin/work-schedules', label: 'Schedules' },
+    { href: '/dashboard/settings/bulk-update', label: 'Bulk Update' },
     { href: '/admin/manage-admins', label: 'Manage Admins', highlight: true },
   ];
 
@@ -34,18 +40,17 @@ export function SuperAdminHeader() {
       <div className="w-full sm:w-auto">
         <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2 flex-wrap justify-end gap-2">
           {nav.map((item) => {
-            const active = pathname?.startsWith(item.href);
-            const variant = active ? 'outline' : item.highlight ? 'outline' : 'secondary';
-            const baseClasses = item.highlight
-              ? 'bg-white text-red-700 hover:bg-gray-100'
-              : '';
+            const active = pathname === item.href || pathname?.startsWith(item.href);
+            // Unify to golden scheme. On dark gradient, use stronger contrast.
+            const activeClasses = 'bg-yellow-300 text-red-900 ring-1 ring-yellow-100';
+            const normalClasses = item.highlight ? 'bg-white text-red-700 hover:bg-gray-100' : 'bg-white/10 hover:bg-white/20';
             return (
               <Button
                 key={item.href}
                 asChild
                 size="sm"
-                variant={variant as any}
-                className={cn(baseClasses, active && 'ring-1 ring-white/70')}
+                variant="outline"
+                className={cn(active ? activeClasses : normalClasses)}
               >
                 <Link href={item.href}>{item.label}</Link>
               </Button>

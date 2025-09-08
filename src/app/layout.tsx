@@ -3,6 +3,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
 import { DashboardHeader } from "@/components/DashboardHeader";
+import { headers } from "next/headers";
+import Link from "next/link";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -16,11 +18,19 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // We only want the dashboard header after authentication.
+  // Exclude it on login and register routes.
+  const h = headers();
+  const pathname = h.get("x-pathname") || "";
+
+  const hideHeader =
+    pathname.startsWith("/login") || pathname.startsWith("/register");
+
   return (
     <html lang="en">
       <body className={inter.className}>
         <Providers>
-          <DashboardHeader />
+          {!hideHeader && <DashboardHeader />}
           {children}
         </Providers>
       </body>
