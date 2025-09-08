@@ -58,3 +58,12 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-brand text-white hover:bg-brand-600 focus:ring-brand-400 focus:ring-offset-white px-4 py-2;
+  }
+  .btn-primary-outline {
+    @apply inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-brand text-brand bg-white hover:bg-brand/10 focus:ring-brand-400 focus:ring-offset-white px-4 py-2;
+  }
+}

@@ -49,12 +49,7 @@ export function SuperAdminHeader() {
                 key={item.href}
                 asChild
                 size="sm"
-                variant="outline"
-                className={cn(
-                  active
-                    ? 'bg-brand text-white hover:bg-brand/90 ring-1 ring-brand'
-                    : 'bg-white text-brand hover:bg-brand/10 border-brand'
-                )}
+                className={cn(active ? 'btn-primary' : 'btn-primary-outline')}
               >
                 <Link href={item.href}>{item.label}</Link>
               </Button>
@@ -63,7 +58,7 @@ export function SuperAdminHeader() {
           <Button
             onClick={() => signOut({ callbackUrl: '/login' })}
             size="sm"
-            className="w-full sm:w-auto bg-brand text-white hover:bg-brand/90"
+            className="w-full sm:w-auto btn-primary"
           >
             Log Out
           </Button>

@@ -23,13 +23,13 @@ export function EmployeeHeader() {
         </p>
       </div>
       <div className="flex items-center space-x-2 flex-wrap justify-end gap-2">
-        <Button asChild size="sm" variant="outline" className="bg-white text-brand hover:bg-brand/10 border-brand">
+        <Button asChild size="sm" className="btn-primary-outline">
           <Link href="/dashboard/reports">Reports</Link>
         </Button>
         <Button 
           onClick={() => signOut({ callbackUrl: '/login' })} 
           size="sm"
-          className="w-full sm:w-auto bg-brand text-white hover:bg-brand/90"
+          className="w-full sm:w-auto btn-primary"
         >
           Log Out
         </Button>

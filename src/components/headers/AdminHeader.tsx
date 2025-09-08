@@ -45,12 +45,7 @@ export function AdminHeader() {
               key={item.href}
               asChild
               size="sm"
-              variant="outline"
-              className={cn(
-                active
-                  ? 'bg-brand text-white hover:bg-brand/90 ring-1 ring-brand'
-                  : 'bg-white text-brand hover:bg-brand/10 border-brand'
-              )}
+              className={cn(active ? 'btn-primary' : 'btn-primary-outline')}
             >
               <Link href={item.href}>{item.label}</Link>
             </Button>
@@ -59,7 +54,7 @@ export function AdminHeader() {
         <Button
           onClick={() => signOut({ callbackUrl: '/login' })}
           size="sm"
-          className="bg-brand text-white hover:bg-brand/90"
+          className="btn-primary"
         >
           Log Out
         </Button>
