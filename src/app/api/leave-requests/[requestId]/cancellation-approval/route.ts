@@ -1,9 +1,9 @@
 // File: src/app/api/leave-requests/[requestId]/cancellation-approval/route.ts
 
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import db from '@/lib/prisma';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '../../../auth/[...nextauth]/route';
+import { db } from '@/lib/db';
 
 export async function PATCH(
   req: Request,
@@ -74,8 +74,27 @@ export async function PATCH(
         const end = new Date(leaveRequest.endDate);
         let workSchedule = leaveRequest.employee.workSchedule || await db.workSchedule.findFirst({ where: { isDefault: true } });
         if (!workSchedule) throw new Error("No default work schedule found.");
-        const holidays = await db.holiday.findMany({ where: { date: { gte: start, lte: end } } });
-        const holidayDates = new Set(holidays.map(h => h.date.toISOString().split('T')[0]));
+
+        // Gather holidays that overlap the range and expand to dates
+        const rangedHolidays = await db.holiday.findMany({
+          where: {
+            AND: [
+              { startDate: { lte: end } },
+              { endDate: { gte: start } },
+            ],
+          },
+        });
+        const holidayDates = new Set<string>();
+        for (const h of rangedHolidays) {
+          const hStart = new Date(h.startDate);
+          const hEnd = new Date(h.endDate);
+          const d = new Date(hStart);
+          while (d <= hEnd) {
+            holidayDates.add(d.toISOString().split('T')[0]);
+            d.setDate(d.getDate() + 1);
+          }
+        }
+
         let workingDaysToRestore = 0;
         let currentDate = new Date(start);
         const weekendMap = [!workSchedule.isSunday, !workSchedule.isMonday, !workSchedule.isTuesday, !workSchedule.isWednesday, !workSchedule.isThursday, !workSchedule.isFriday, !workSchedule.isSaturday];

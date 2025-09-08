@@ -1,9 +1,9 @@
-// File: src/app/api/leave-requests/[id]/cancel/route.ts
+// File: src/app/api/leave-requests/[requestId]/cancel/route.ts
 
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import db from '@/lib/prisma';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '../../../auth/[...nextauth]/route';
+import { db } from '@/lib/db';
 
 export async function PATCH(
   req: Request,
@@ -34,12 +34,12 @@ export async function PATCH(
       return new NextResponse("Leave request not found", { status: 404 });
     }
 
-    // 🛡️ SECURITY CHECK 1: Ensure the user owns this request
+    // Ensure the user owns this request
     if (leaveRequestToCancel.employeeId !== userProfile.id) {
       return new NextResponse("Forbidden: You cannot cancel a request that is not yours.", { status: 403 });
     }
 
-    // 🛡️ SECURITY CHECK 2: Ensure the request is in a cancellable state
+    // Ensure the request is in a cancellable state
     const cancellableStatuses = ['PENDING_MANAGER'];
     if (!cancellableStatuses.includes(leaveRequestToCancel.status)) {
       return new NextResponse(`Request cannot be cancelled. Status is already '${leaveRequestToCancel.status}'`, { status: 400 });
