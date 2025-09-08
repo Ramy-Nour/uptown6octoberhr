@@ -165,7 +165,7 @@ export default function WorkSchedulePage() {
           {editingScheduleId ? 'Edit Schedule' : 'Add New Schedule'}
         </h2>
         <form onSubmit={handleFormSubmit}>
-          {error && <p className="text-red-500 mb-4">{error}</p>}
+          {error && <p className="text-red-500 mb-4">Could not load schedules.</p>}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
              <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700">Schedule Name</label>
@@ -198,11 +198,11 @@ export default function WorkSchedulePage() {
             </label>
             <div>
               {editingScheduleId && (
-                <button type="button" onClick={resetForm} className="px-4 py-2 bg-gray-300 text-black rounded-md hover:bg-gray-400 mr-2">
+                <button type="button" onClick={resetForm} className="px-4 py-2 btn-primary-outline mr-2">
                   Cancel
                 </button>
               )}
-              <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+              <button type="submit" className="px-4 py-2 btn-primary">
                 {editingScheduleId ? 'Update Schedule' : 'Add Schedule'}
               </button>
             </div>
@@ -241,7 +241,7 @@ export default function WorkSchedulePage() {
                         .join(', ')}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button onClick={() => handleEditClick(schedule)} className="text-indigo-600 hover:text-indigo-900">Edit</button>
+                      <button onClick={() => handleEditClick(schedule)} className="text-brand-600 hover:text-brand-700">Edit</button>
                       <button 
                         onClick={() => handleDeleteSchedule(schedule.id)} 
                         className="text-red-600 hover:text-red-900 ml-4"
@@ -251,6 +251,12 @@ export default function WorkSchedulePage() {
                     </td>
                 </tr>
                 ))}
+            </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
             </tbody>
         </table>
       </div>

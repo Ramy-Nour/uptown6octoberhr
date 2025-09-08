@@ -140,7 +140,7 @@ export function EmployeeForm({ onSubmit, isLoading = false }: EmployeeFormProps)
               variant="outline"
               role="combobox"
               aria-expanded={open}
-              className="w-full justify-between"
+              className="btn-primary-outline w-full justify-between"
             >
               {selectedManager
                 ? `${selectedManager.firstName} ${selectedManager.lastName} (${selectedManager.user.email})`
@@ -179,7 +179,7 @@ export function EmployeeForm({ onSubmit, isLoading = false }: EmployeeFormProps)
         {errors.managerId && (<p className="text-sm text-red-500 mt-1">{errors.managerId.message}</p>)}
       </div>
 
-      <Button type="submit" disabled={isLoading}>
+      <Button type="submit" disabled={isLoading} className="btn-primary">
         {isLoading ? 'Creating...' : 'Create Employee'}
       </Button>
     </form>

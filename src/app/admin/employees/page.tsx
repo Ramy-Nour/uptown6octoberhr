@@ -76,7 +76,7 @@ export default function ManageEmployeesPage() {
                 <Button onClick={() => setView('active')} variant={view === 'active' ? 'secondary' : 'ghost'} size="sm">Active</Button>
                 <Button onClick={() => setView('inactive')} variant={view === 'inactive' ? 'secondary' : 'ghost'} size="sm">Inactive</Button>
             </div>
-            <Button asChild><Link href="/admin/employees/create">Add New Employee</Link></Button>
+            <Button asChild className="btn-primary"><Link href="/admin/employees/create">Add New Employee</Link></Button>
         </div>
       </div>
       <Card>
@@ -103,7 +103,7 @@ export default function ManageEmployeesPage() {
                       {view === 'active' ? (
                         <Button variant="link" size="sm" className="text-destructive" onClick={() => handleDeactivate(employee.id)}>Deactivate</Button>
                       ) : (
-                        <Button variant="link" size="sm" className="text-green-600" onClick={() => handleReactivate(employee.id)}>Reactivate</Button>
+                        <Button variant="link" size="sm" className="text-brand-600" onClick={() => handleReactivate(employee.id)}>Reactivate</Button>
                       )}
                     </TableCell>
                   </TableRow>

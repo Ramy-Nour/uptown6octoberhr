@@ -173,7 +173,7 @@ export default function RequestLeavePage() {
           </CardContent>
 
           <div className="flex justify-end p-6 pt-0">
-            <Button type="submit" disabled={isLoading}>
+            <Button type="submit" disabled={isLoading} className="btn-primary">
               {isLoading ? 'Submitting...' : 'Submit Request'}
             </Button>
           </div>
