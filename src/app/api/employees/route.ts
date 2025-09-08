@@ -56,6 +56,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "User with this email already exists" }, { status: 409 });
     }
 
+    if (managerId) {
+      const mgrExists = await db.employeeProfile.findUnique({ where: { id: managerId }, select: { id: true }});
+      if (!mgrExists) {
+        return NextResponse.json({ message: "Selected manager does not exist" }, { status: 400 });
+      }
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const profileData: any = {

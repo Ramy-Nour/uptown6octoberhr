@@ -27,6 +27,7 @@ export async function GET(req: Request) {
     const employeeIdParam = searchParams.get('employeeId');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
+    const statusesParam = searchParams.get('statuses'); // comma-separated list of LeaveStatus values
 
     // Resolve current user's employee profile
     const me = await db.employeeProfile.findUnique({
@@ -97,6 +98,16 @@ export async function GET(req: Request) {
         gte: new Date(startDate),
         lt: endOfDay,
       };
+    }
+
+    // Apply status filter if provided. Expect exact enum values from client:
+    // APPROVED_BY_ADMIN, DENIED, PENDING_MANAGER, PENDING_ADMIN, CANCELLED,
+    // CANCELLATION_PENDING_MANAGER, CANCELLATION_PENDING_ADMIN, APPROVED_BY_MANAGER
+    if (statusesParam) {
+      const rawStatuses = statusesParam.split(',').map(s => s.trim()).filter(Boolean);
+      if (rawStatuses.length > 0) {
+        whereClause.status = { in: rawStatuses as any };
+      }
     }
 
     const leaveRequests = await db.leaveRequest.findMany({
