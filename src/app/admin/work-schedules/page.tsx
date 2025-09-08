@@ -257,9 +257,3 @@ export default function WorkSchedulePage() {
     </div>
   );
 }
-            </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
