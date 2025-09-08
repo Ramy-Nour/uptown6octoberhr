@@ -12,6 +12,7 @@ interface Holiday {
   date: string;
   type: string;
   employeeId?: string | null;
+  repeatWeekly?: boolean;
 }
 
 interface Employee {
@@ -36,6 +37,7 @@ export default function HolidayManagementPage() {
   const [date, setDate] = useState('');
   const [type, setType] = useState('COMPANY');
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [repeatWeekly, setRepeatWeekly] = useState(false);
 
   const resetForm = () => {
     setEditingHolidayId(null);
@@ -43,6 +45,7 @@ export default function HolidayManagementPage() {
     setDate('');
     setType('COMPANY');
     setSelectedEmployeeId('');
+    setRepeatWeekly(false);
     setError(null);
   };
 
@@ -95,6 +98,7 @@ export default function HolidayManagementPage() {
         type,
         createdBy, // For POST requests
         employeeId: type === 'EMPLOYEE' ? selectedEmployeeId : null,
+        repeatWeekly: type === 'EMPLOYEE' ? repeatWeekly : false,
     };
 
     try {
@@ -151,6 +155,7 @@ export default function HolidayManagementPage() {
     setDate(new Date(holiday.date).toISOString().split('T')[0]);
     setType(holiday.type);
     setSelectedEmployeeId(holiday.employeeId || '');
+    setRepeatWeekly(Boolean(holiday.repeatWeekly));
   };
 
   if (isLoading) { return <div className="p-8">Loading...</div>; }
@@ -184,16 +189,30 @@ export default function HolidayManagementPage() {
                 </div>
             </div>
             {type === 'EMPLOYEE' && (
-                <div className="mt-6">
-                    <label htmlFor="employee" className="block text-sm font-medium text-gray-700">Select Employee</label>
-                    <select id="employee" value={selectedEmployeeId} onChange={(e) => setSelectedEmployeeId(e.target.value)} required className="mt-1 w-full border border-gray-300 rounded-md p-2">
-                        <option value="">-- Please select an employee --</option>
-                        {employees.map(emp => (
-                            <option key={emp.id} value={emp.profile.id}>
-                                {emp.profile.firstName} {emp.profile.lastName}
-                            </option>
-                        ))}
-                    </select>
+                <div className="mt-6 space-y-4">
+                    <div>
+                      <label htmlFor="employee" className="block text-sm font-medium text-gray-700">Select Employee</label>
+                      <select id="employee" value={selectedEmployeeId} onChange={(e) => setSelectedEmployeeId(e.target.value)} required className="mt-1 w-full border border-gray-300 rounded-md p-2">
+                          <option value="">-- Please select an employee --</option>
+                          {employees.map(emp => (
+                              <option key={emp.id} value={emp.profile.id}>
+                                  {emp.profile.firstName} {emp.profile.lastName}
+                              </option>
+                          ))}
+                      </select>
+                    </div>
+                    <div className="flex items-center">
+                      <input
+                        id="repeatWeekly"
+                        type="checkbox"
+                        checked={repeatWeekly}
+                        onChange={(e) => setRepeatWeekly(e.target.checked)}
+                        className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                      />
+                      <label htmlFor="repeatWeekly" className="ml-2 block text-sm text-gray-700">
+                        Repeat weekly (every {date ? new Date(date).toLocaleDateString(undefined, { weekday: 'long' }) : 'week'})
+                      </label>
+                    </div>
                 </div>
             )}
              <div className="flex justify-end mt-6">

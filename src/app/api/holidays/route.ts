@@ -82,12 +82,20 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, date, type, createdBy, isLocked } = body;
+    const { name, date, type, createdBy, isLocked, employeeId, repeatWeekly } = body;
 
     // Basic validation to ensure required fields are present
     if (!name || !date || !type || !createdBy) {
       return NextResponse.json(
         { error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    // If employee-specific, ensure employeeId is provided
+    if (type === 'EMPLOYEE' && !employeeId) {
+      return NextResponse.json(
+        { error: 'Employee-specific holidays require an employeeId' },
         { status: 400 }
       );
     }
@@ -99,6 +107,8 @@ export async function POST(request: Request) {
         type,
         createdBy,
         isLocked: isLocked ?? false,
+        employeeId: type === 'EMPLOYEE' ? employeeId : null,
+        repeatWeekly: type === 'EMPLOYEE' ? Boolean(repeatWeekly) : false,
       },
     });
 
