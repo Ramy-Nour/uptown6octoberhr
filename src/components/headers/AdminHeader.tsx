@@ -29,7 +29,7 @@ export function AdminHeader() {
       <div className="mb-4 sm:mb-0">
         <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <img src="/logo.png" alt="Company Logo" className="h-8 w-8 object-contain" />
+            <img src="/logo.png" alt="Company Logo" className="h-32 w-32 object-contain" />
             <span>Uptown October HR</span>
           </Link>
         </h1>
