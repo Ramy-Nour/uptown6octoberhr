@@ -14,13 +14,13 @@ export function SuperAdminHeader() {
   // Super Admin: all admin buttons + Manage Admins
   const nav = [
     { href: '/admin/employees', label: 'Manage Employees' },
-    { href: '/admin/employees/new', label: 'Add Employee' },
-    { href: '/admin/reports', label: 'Reports' },
-    { href: '/admin/leave-types', label: 'Leave Types' },
-    { href: '/admin/leave-balances', label: 'Leave Balances' },
+    { href: '/admin/employees/create', label: 'Add Employee' },
+    { href: '/dashboard/reports', label: 'Reports' },
+    { href: '/dashboard/settings/leave-types', label: 'Leave Types' },
+    { href: '/dashboard/settings/leave-balances', label: 'Leave Balances' },
     { href: '/admin/holidays', label: 'Holidays' },
     { href: '/admin/work-schedules', label: 'Schedules' },
-    { href: '/admin/bulk-update', label: 'Bulk Update' },
+    { href: '/dashboard/settings/bulk-update', label: 'Bulk Update' },
     { href: '/admin/manage-admins', label: 'Manage Admins', highlight: true },
   ];
 

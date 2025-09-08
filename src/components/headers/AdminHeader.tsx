@@ -11,17 +11,17 @@ export function AdminHeader() {
   const { data: session } = useSession();
   const pathname = usePathname();
 
-  // Admin buttons:
+  // Admin buttons with requested routes:
   // Manage Employees, Add Employee, Reports, Leave Types, Leave Balances, Holidays, Schedules, Bulk Update
   const nav = [
     { href: '/admin/employees', label: 'Manage Employees' },
-    { href: '/admin/employees/new', label: 'Add Employee' },
-    { href: '/admin/reports', label: 'Reports' },
-    { href: '/admin/leave-types', label: 'Leave Types' },
-    { href: '/admin/leave-balances', label: 'Leave Balances' },
+    { href: '/admin/employees/create', label: 'Add Employee' },
+    { href: '/dashboard/reports', label: 'Reports' },
+    { href: '/dashboard/settings/leave-types', label: 'Leave Types' },
+    { href: '/dashboard/settings/leave-balances', label: 'Leave Balances' },
     { href: '/admin/holidays', label: 'Holidays' },
     { href: '/admin/work-schedules', label: 'Schedules' },
-    { href: '/admin/bulk-update', label: 'Bulk Update' },
+    { href: '/dashboard/settings/bulk-update', label: 'Bulk Update' },
   ];
 
   return (
