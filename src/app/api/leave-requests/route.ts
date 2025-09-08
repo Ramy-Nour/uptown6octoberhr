@@ -108,25 +108,41 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "No default work schedule found. Please configure one." }, { status: 500 });
     }
 
-    // Holidays within range: company/national/team + employee-specific for this employee
+    // Holidays within range: overlap with requested range AND relevant type
     const rangedHolidays = await db.holiday.findMany({
       where: {
-        date: { gte: start, lte: end },
-        OR: [
-          { type: 'COMPANY' },
-          { type: 'NATIONAL' },
-          { type: 'TEAM' },
-          { AND: [{ type: 'EMPLOYEE' }, { employeeId: employeeProfile.id }] },
+        AND: [
+          { startDate: { lte: end } }, // holiday starts before or on end of request
+          { endDate: { gte: start } }, // holiday ends after or on start of request
+          {
+            OR: [
+              { type: 'COMPANY' },
+              { type: 'NATIONAL' },
+              { type: 'TEAM' },
+              { AND: [{ type: 'EMPLOYEE' }, { employeeId: employeeProfile.id }] },
+            ],
+          },
         ],
       },
     });
-    const holidayDates = new Set(rangedHolidays.map(h => h.date.toISOString().split('T')[0]));
+
+    // Expand holiday ranges to individual date strings for quick lookup
+    const holidayDates = new Set<string>();
+    for (const h of rangedHolidays) {
+      const hStart = new Date(h.startDate);
+      const hEnd = new Date(h.endDate);
+      const d = new Date(hStart);
+      while (d <= hEnd) {
+        holidayDates.add(d.toISOString().split('T')[0]);
+        d.setDate(d.getDate() + 1);
+      }
+    }
 
     // Weekly recurring employee-specific holidays (weekday-based offs)
     const weeklyEmployeeHolidays = await db.holiday.findMany({
       where: { type: 'EMPLOYEE', employeeId: employeeProfile.id, repeatWeekly: true },
     });
-    const weeklyHolidayWeekdays = new Set<number>(weeklyEmployeeHolidays.map(h => new Date(h.date).getDay()));
+    const weeklyHolidayWeekdays = new Set<number>(weeklyEmployeeHolidays.map(h => new Date(h.startDate).getDay()));
 
     let workingDaysRequested = 0;
     let currentDate = new Date(start);
