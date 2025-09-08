@@ -9,8 +9,11 @@ import * as z from 'zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DatePicker } from '@/components/ui/date-picker'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { Check, ChevronsUpDown } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 // UPDATED: Removed 'role' from the schema
 const formSchema = z.object({
@@ -44,6 +47,8 @@ interface EmployeeFormProps {
 export function EmployeeForm({ onSubmit, isLoading = false }: EmployeeFormProps) {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
+  const [open, setOpen] = useState(false)
+  const [selectedManager, setSelectedManager] = useState<Employee | null>(null)
 
   const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<EmployeeFormValues>({
     resolver: zodResolver(formSchema),
@@ -57,25 +62,25 @@ export function EmployeeForm({ onSubmit, isLoading = false }: EmployeeFormProps)
     },
   })
 
- useEffect(() => {
-  const fetchEmployees = async () => {
-    try {
-      const response = await fetch('/api/employees/list'); // ✅ Correct endpoint
-      if (response.ok) {
-        const data: Employee[] = await response.json();
-        setEmployees(data);
-      } else {
-        console.error('Failed to load employees:', await response.text());
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        const response = await fetch('/api/employees/list') // ✅ Correct endpoint
+        if (response.ok) {
+          const data: Employee[] = await response.json()
+          setEmployees(data)
+        } else {
+          console.error('Failed to load employees:', await response.text())
+        }
+      } catch (error) {
+        console.error('Failed to fetch employees:', error)
+      } finally {
+        setLoading(false)
       }
-    } catch (error) {
-      console.error('Failed to fetch employees:', error);
-    } finally {
-      setLoading(false);
     }
-  };
 
-  fetchEmployees();
-}, []);
+    fetchEmployees()
+  }, [])
 
   const onFormSubmit = async (data: EmployeeFormValues) => {
     await onSubmit(data)
@@ -125,27 +130,52 @@ export function EmployeeForm({ onSubmit, isLoading = false }: EmployeeFormProps)
         />
         {errors.startDate && (<p className="text-sm text-red-500 mt-1">{errors.startDate.message}</p>)}
       </div>
-      
-      {/* REMOVED: The entire 'Role' dropdown is now gone */}
 
       <div>
         <Label htmlFor="managerId">Manager (Optional)</Label>
-        <Select onValueChange={(value) => setValue('managerId', value)}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select a manager" />
-          </SelectTrigger>
-          <SelectContent>
-            {loading ? (
-              <SelectItem value="loading" disabled>Loading managers...</SelectItem>
-            ) : (
-              employees.map((employee) => (
-                <SelectItem key={employee.id} value={employee.id}>
-                  {employee.firstName} {employee.lastName} ({employee.user.email})
-                </SelectItem>
-              ))
-            )}
-          </SelectContent>
-        </Select>
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              role="combobox"
+              aria-expanded={open}
+              className="w-full justify-between"
+            >
+              {selectedManager
+                ? `${selectedManager.firstName} ${selectedManager.lastName} (${selectedManager.user.email})`
+                : loading ? 'Loading managers...' : 'Select a manager'}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+            <Command>
+              <CommandInput placeholder="Search manager..." />
+              <CommandList>
+                <CommandEmpty>No manager found.</CommandEmpty>
+                <CommandGroup>
+                  {employees.map((employee) => {
+                    const isSelected = selectedManager?.id === employee.id
+                    return (
+                      <CommandItem
+                        key={employee.id}
+                        value={`${employee.firstName} ${employee.lastName} ${employee.user.email}`}
+                        onSelect={() => {
+                          setSelectedManager(employee)
+                          setValue('managerId', employee.id)
+                          setOpen(false)
+                        }}
+                      >
+                        <Check className={cn('mr-2 h-4 w-4', isSelected ? 'opacity-100' : 'opacity-0')} />
+                        {employee.firstName} {employee.lastName} ({employee.user.email})
+                      </CommandItem>
+                    )
+                  })}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
         {errors.managerId && (<p className="text-sm text-red-500 mt-1">{errors.managerId.message}</p>)}
       </div>
 

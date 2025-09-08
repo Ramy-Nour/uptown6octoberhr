@@ -5,12 +5,13 @@ import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon, Check, ChevronsUpDown } from 'lucide-react';
 import { format } from 'date-fns';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { cn } from '@/lib/utils';
 
 interface EmployeeData {
   id: string;
@@ -33,6 +34,7 @@ interface ManagerOption {
 export default function EditEmployeePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [managers, setManagers] = useState<ManagerOption[]>([]);
+  const [managerPopoverOpen, setManagerPopoverOpen] = useState(false);
   const router = useRouter();
   const params = useParams();
   const employeeId = params.id as string;
@@ -43,6 +45,7 @@ export default function EditEmployeePage() {
   const [position, setPosition] = useState('');
   const [startDate, setStartDate] = useState<Date | undefined>(undefined); // Changed from hireDate to startDate
   const [managerId, setManagerId] = useState<string | null>(null);
+  const [selectedManager, setSelectedManager] = useState<ManagerOption | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -70,6 +73,15 @@ export default function EditEmployeePage() {
     };
     fetchData();
   }, [employeeId]);
+
+  useEffect(() => {
+    if (managerId) {
+      const found = managers.find(m => m.id === managerId) || null;
+      setSelectedManager(found);
+    } else {
+      setSelectedManager(null);
+    }
+  }, [managerId, managers]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -152,21 +164,64 @@ export default function EditEmployeePage() {
 
             <div>
               <Label htmlFor="managerId">Manager (Optional)</Label>
-              <Select value={managerId || 'none'} onValueChange={setManagerId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a manager" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No Manager</SelectItem>
-                  {managers
-                    .filter((manager) => manager.id !== employeeId)
-                    .map((manager) => (
-                      <SelectItem key={manager.id} value={manager.id}>
-                        {manager.firstName} {manager.lastName}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+              <Popover open={managerPopoverOpen} onOpenChange={setManagerPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={managerPopoverOpen}
+                    className="w-full justify-between"
+                  >
+                    {selectedManager
+                      ? `${selectedManager.firstName} ${selectedManager.lastName}`
+                      : managerId === 'none'
+                        ? 'No Manager'
+                        : 'Select a manager'}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                  <Command>
+                    <CommandInput placeholder="Search manager..." />
+                    <CommandList>
+                      <CommandEmpty>No manager found.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="No Manager"
+                          onSelect={() => {
+                            setManagerId('none');
+                            setSelectedManager(null);
+                            setManagerPopoverOpen(false);
+                          }}
+                        >
+                          <Check className={cn('mr-2 h-4 w-4', managerId === 'none' ? 'opacity-100' : 'opacity-0')} />
+                          No Manager
+                        </CommandItem>
+                        {managers
+                          .filter((manager) => manager.id !== employeeId)
+                          .map((manager) => {
+                            const isSelected = managerId === manager.id;
+                            return (
+                              <CommandItem
+                                key={manager.id}
+                                value={`${manager.firstName} ${manager.lastName}`}
+                                onSelect={() => {
+                                  setManagerId(manager.id);
+                                  setSelectedManager(manager);
+                                  setManagerPopoverOpen(false);
+                                }}
+                              >
+                                <Check className={cn('mr-2 h-4 w-4', isSelected ? 'opacity-100' : 'opacity-0')} />
+                                {manager.firstName} {manager.lastName}
+                              </CommandItem>
+                            );
+                          })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             <Button type="submit" disabled={isLoading}>
